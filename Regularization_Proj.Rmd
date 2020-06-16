@@ -12,6 +12,7 @@ output:
         number_sections: true 
         theme: united
         highlight: tango
+        keep_md: true
 header-includes:
 - \usepackage{amsmath}
 - \usepackage{booktabs}
