@@ -35,6 +35,7 @@ header-includes:
 
 
 
+
 # Introduction
 
 The aims of this project are to simulate multivariate data from underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for every underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods. Finally, we use mean and median Mean Square Error to compare performances. The following models will be compared. The immediate next step for this project is to add performance metrics such as AIC and BIC in addition to the mean and median MSE to better capture model performances. I also want to vectorize all loops and generally reduce redudant variable storage where possible.
