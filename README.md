@@ -1,2 +1,2 @@
 # Regularization-Project
-Personal Project comparing variable selection methods on simulated data.
+A personal project comparing regularization methods on simulated data.
