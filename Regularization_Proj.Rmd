@@ -6,6 +6,7 @@ author:
   affiliation: University of Nevada, Reno
 output:
   html_document:
+        code_folding: hide
         toc: true 
         toc_float: true
         toc_depth: 2
@@ -42,796 +43,20 @@ library(rlist)
 library(dvmisc)
 library(kableExtra)
 library(ggplot2)
-library(tidyr)
+library(tidyverse)  # Data Manipulation and Visualization
 library(hrbrthemes)
 library(viridis)
+library(caret)      # ML framework
+library(leaps)      # Forward/Backward/Stepwise Regression
+library(olsrr)      # Another Package For Forward/Backward/Stepwise Regression
 
 set.seed(122)
 ```
 
-```{r, include=FALSE}
-# All following functions were provided by Dr. Mihye Ahn
-
-allpossible <- function(X, y){
-  k <- dim(X)[2]
-  p <- k+1
-  
-  myoutput <- matrix(0, 2^k, k+4) 
-  colnames(myoutput) <- c(colnames(X), "Adj.R2", "MSE", "AIC", "BIC")
-  
-  i <- 1
-  for (p2 in 0:k){
-    allcomb <- combn(k, p2) 
-    for (x2 in 1:dim(allcomb)[2]){
-      if (p2==0){
-        fit <- lm(y~1)
-      }
-      else{
-        fit <- lm(y~as.matrix(X[,allcomb[,x2]]))
-        myoutput[i, allcomb[,x2]] <- 1  # 1=included, 0=excluded
-      }
-      myoutput[i, k+1] <- summary(fit)$adj.r.squared  # Adjusted R^2
-      myoutput[i, k+2] <- summary(fit)$sigma^2        # MSE
-      myoutput[i, k+3] <- AIC(fit) # AIC
-      myoutput[i, k+4] <- BIC(fit) # BIC
-      i <- i+1
-    }
-  }
-  myoutput <- as.data.frame(myoutput) 
-  
-  best1 <- myoutput[which.max(myoutput$Adj.R2), 1:k]
-  best2 <- myoutput[which.min(myoutput$MSE), 1:k]
-  best3 <- myoutput[which.min(myoutput$AIC), 1:k]
-  best4 <- myoutput[which.min(myoutput$BIC), 1:k]
-  object <- list(all=myoutput, Adj.R2=best1, MSE=best2, AIC=best3, BIC=best4)
-  return(object)
-}
-
-
-
-# forward selection
-
-forward <- function(X, y, method=c("F", "Adj.R2", "MSE", "AIC" , "BIC"), slentry=0.5){
-  k <- dim(X)[2]
-  p <- k+1
-
-  if (method=="F"){
-    best.old <- slentry 
-    best.new <- 0
-    selected.x <- array(F,k)
-    p2 <- 0
-    while (best.new < best.old & p2 < k){
-      allcomb <- which(selected.x==F)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+2) 
-      {
-        if (sum(selected.x)==0)
-          reduced <- lm(y~1)
-        else 
-          reduced <- lm(y~1+as.matrix(X[,selected.x]))
-      }
-      i <- 1
-      for (x2 in 1:no){
-        full.x <- selected.x 
-        full.x[allcomb[x2]] <- T
-        myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-        partialF <- anova(reduced, lm(y~as.matrix(X[,full.x])))
-        myoutput[i, k+1] <- partialF$"F"[2]
-        myoutput[i, k+2] <- partialF$"Pr(>F)"[2]
-        i <- i+1
-      }
-      location <- which.max(myoutput[,k+1])
-      best.new <- myoutput[location,k+2]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 + 1 
-    }
-  }
-  
-  # Adj.R2
-  
-  else if (method=="Adj.R2"){
-    best.old <- -1 
-    best.new <- 0
-    selected.x <- array(F,k)
-    p2 <- 0
-    while (best.new > best.old & p2 < k){
-      best.old <- best.new
-      allcomb <- which(selected.x==F)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        full.x <- selected.x 
-        full.x[allcomb[x2]] <- T
-        myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- summary(lm(y~as.matrix(X[,full.x])))$adj.r.squared
-        i <- i+1
-      }
-      location <- which.max(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new > best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 + 1 
-    }
-  }
- 
-  # MSE
-  
-  else if (method=="MSE"){
-    best.old <- Inf
-    best.new <- summary(lm(y~1))$sigma^2 
-    selected.x <- array(F,k)
-    p2 <- 0
-    while (best.new < best.old & p2 < k){
-      best.old <- best.new
-      allcomb <- which(selected.x==F)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        full.x <- selected.x 
-        full.x[allcomb[x2]] <- T
-        myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- summary(lm(y~as.matrix(X[,full.x])))$sigma^2
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 + 1 
-    } 
-  }
- 
-  # AIC
-  
-  else if (method=="AIC"){
-    best.old <- Inf
-    best.new <- AIC(lm(y~1)) 
-    selected.x <- array(F,k)
-    p2 <- 0
-    while (best.new < best.old & p2 < k){
-      best.old <- best.new
-      allcomb <- which(selected.x==F)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        full.x <- selected.x 
-        full.x[allcomb[x2]] <- T
-        myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- AIC(lm(y~as.matrix(X[,full.x])))
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 + 1 
-    }  
-  }
- 
-  # BIC
-  
-  else {  # method=="BIC"
-    best.old <- Inf
-    best.new <- BIC(lm(y~1)) 
-    selected.x <- array(F,k)
-    p2 <- 0
-    while (best.new < best.old & p2 < k){
-      best.old <- best.new
-      allcomb <- which(selected.x==F)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        full.x <- selected.x 
-        full.x[allcomb[x2]] <- T
-        myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- BIC(lm(y~as.matrix(X[,full.x])))
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 + 1 
-    }  
-  }
-  # for all
-  selected.x <- as.matrix(selected.x,k,1)
-  rownames(selected.x) <- colnames(X)
-  return(selected.x)  
-}
-
-
-# backward elimination 
-
-backward <- function(X, y, method=c("F", "Adj.R2", "MSE", "AIC" , "BIC"), slstay=0.10){
-  k <- dim(X)[2]
-  p <- k+1
-
-  if (method=="F"){
-    best.old <- slstay
-    best.new <- 1
-    selected.x <- array(T,k)
-    p2 <- k
-    while (best.new > best.old & p2 > 0){
-      allcomb <- which(selected.x==T)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+2) 
-      i <- 1
-      for (x2 in 1:no){
-        reduced.x <- selected.x 
-        reduced.x[allcomb[x2]] <- F
-        {
-          if (no==1)
-            reduced <- lm(y~1)
-          else 
-            reduced <- lm(y~1+as.matrix(X[,reduced.x]))
-        }
-        myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-        partialF <- anova(reduced, lm(y~1+as.matrix(X[,selected.x])))
-        myoutput[i, k+1] <- partialF$"F"[2]
-        myoutput[i, k+2] <- partialF$"Pr(>F)"[2]
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+2]
-      if (best.new > best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 - 1 
-    }
-  }
-  
-  # Adj.R2
-  
-  else if (method=="Adj.R2"){
-    best.old <- 0
-    best.new <- summary(lm(y~X))$adj.r.squared 
-    selected.x <- array(T,k)
-    p2 <- k
-    while (best.new > best.old & p2 > 0){
-      best.old <- best.new
-      allcomb <- which(selected.x==T)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        reduced.x <- selected.x 
-        reduced.x[allcomb[x2]] <- F
-        {
-          if (no==1)
-            fit <- lm(y~1)
-          else 
-            fit <- lm(y~1+as.matrix(X[,reduced.x]))
-        }
-        myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- summary(fit)$adj.r.squared
-        i <- i+1
-      }
-      location <- which.max(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new > best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 - 1 
-    }
-  }
- 
-  # MSE
-  
-  else if (method=="MSE"){
-    best.old <- Inf
-    best.new <- summary(lm(y~X))$sigma^2 
-    selected.x <- array(T,k)
-    p2 <- k
-    while (best.new < best.old & p2 > 0){
-      best.old <- best.new
-      allcomb <- which(selected.x==T)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        reduced.x <- selected.x 
-        reduced.x[allcomb[x2]] <- F
-        {
-          if (no==1)
-            fit <- lm(y~1)
-          else 
-            fit <- lm(y~1+as.matrix(X[,reduced.x]))
-        }  
-        myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- summary(fit)$sigma^2
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 - 1 
-    } 
-  }
- 
-  # AIC
-  
-  else if (method=="AIC"){
-    best.old <- Inf
-    best.new <- AIC(lm(y~X)) 
-    selected.x <- array(T,k)
-    p2 <- k
-    while (best.new < best.old & p2 > 0){
-      best.old <- best.new
-      allcomb <- which(selected.x==T)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        reduced.x <- selected.x 
-        reduced.x[allcomb[x2]] <- F
-        {
-          if (no==1)
-            fit <- lm(y~1)
-          else 
-            fit <- lm(y~1+as.matrix(X[,reduced.x]))
-        }  
-        myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- AIC(fit)
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 - 1 
-    }  
-  }
- 
-  # BIC
-  
-  else {  # method=="BIC"
-    best.old <- Inf
-    best.new <- BIC(lm(y~X)) 
-    selected.x <- array(T,k)
-    p2 <- k
-    while (best.new < best.old & p2 > 0){
-      best.old <- best.new
-      allcomb <- which(selected.x==T)
-      no <- length(allcomb)
-      myoutput <- matrix(0, no, k+1) 
-      i <- 1
-      for (x2 in 1:no){
-        reduced.x <- selected.x 
-        reduced.x[allcomb[x2]] <- F
-        {
-          if (no==1)
-            fit <- lm(y~1)
-          else 
-            fit <- lm(y~1+as.matrix(X[,reduced.x]))
-        }  
-        myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-        myoutput[i, k+1] <- BIC(fit)
-        i <- i+1
-      }
-      location <- which.min(myoutput[,k+1])
-      best.new <- myoutput[location,k+1]
-      if (best.new < best.old)
-        selected.x <- myoutput[location,1:k]==1 
-      p2 <- p2 - 1 
-    }   
-  }
-  # for all
-  selected.x <- as.matrix(selected.x,k,1)
-  rownames(selected.x) <- colnames(X)
-  return(selected.x) 
-}
-
-
-
-
-# Stepwise selection 
-
-stepwise <- function(X, y, method=c("F", "Adj.R2", "MSE", "AIC" , "BIC"), slentry=0.15, slstay=0.15){
-  k <- dim(X)[2]
-  p <- k+1
-
-  if (method=="F"){
-    selected.x <- array(F,k)
-    selected.x0 <- array(T,k) 
-    selected.x00 <- array(T,k) 
-    while (any(selected.x0 != selected.x) & any(selected.x00 != selected.x)){
-      selected.x00 <- selected.x0 
-      selected.x0 <- selected.x 
-      candidate.add <- which(selected.x==F)
-      candidate.remove <- which(selected.x==T)
-      { # the first step (no variables in model)
-        if (sum(selected.x)==0){ # go to addition step
-          model.old <- lm(y~1)
-          # addition     
-          no <- length(candidate.add)
-          myoutput <- matrix(0, no, k+2)
-          i <- 1
-          for (x2 in 1:no){
-            full.x <- selected.x 
-            full.x[candidate.add[x2]] <- T
-            myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-            partialF <- anova(model.old, lm(y~1+as.matrix(X[,full.x])))
-            myoutput[i, k+1] <- partialF$"F"[2]
-            myoutput[i, k+2] <- partialF$"Pr(>F)"[2]
-            i <- i+1
-          }
-          location <- which.max(myoutput[,k+1])
-          best.new <- myoutput[location,k+2]
-          if (best.new < slentry)
-            selected.x <- myoutput[location,1:k]==1 
-        }
-        # if model has one or more variables
-        else { # go to deletion step first 
-          model.old <- lm(y~1+as.matrix(X[,selected.x]))
-          # deletion 
-          no <- length(candidate.remove)
-          myoutput <- matrix(0, no, k+1) 
-          i <- 1
-          for (x2 in 1:no){
-            reduced.x <- selected.x 
-            reduced.x[candidate.remove[x2]] <- F
-            myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-            i <- i+1
-          }
-          myoutput[,k+1] <- summary(model.old)$coef[2:(sum(selected.x)+1),4]
-          location <- which.max(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          {
-            if (best.new > slstay)  # in this case, we don't go to addition step. 
-              selected.x <- myoutput[location,1:k]==1 
-            else{ # no deletion, then go to addition step
-              # addition     
-              no <- length(candidate.add)
-              myoutput <- matrix(0, no, k+2)
-              i <- 1
-              for (x2 in 1:no){
-                full.x <- selected.x 
-                full.x[candidate.add[x2]] <- T
-                myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-                partialF <- anova(model.old, lm(y~1+as.matrix(X[,full.x])))
-                myoutput[i, k+1] <- partialF$"F"[2]
-                myoutput[i, k+2] <- partialF$"Pr(>F)"[2]
-                i <- i+1
-              }
-              location <- which.max(myoutput[,k+1])
-              best.new <- myoutput[location,k+2]
-              if (best.new < slentry)
-                selected.x <- myoutput[location,1:k]==1 
-            }
-          }
-        }
-      }
-    } # while
-    selected.x <- selected.x0 
-  } # end
-  
-  # Adj.R2
-  
-  else if (method=="Adj.R2"){
-    selected.x <- array(F,k)
-    selected.x0 <- array(T,k) 
-    selected.x00 <- array(T,k) 
-    best.new <- 0 
-    while (any(selected.x0 != selected.x) & any(selected.x00 != selected.x)){
-      selected.x00 <- selected.x0 
-      selected.x0 <- selected.x 
-      candidate.add <- which(selected.x==F)
-      candidate.remove <- which(selected.x==T)
-      best.old <- best.new
-      { # the first step (no variables in model)
-        if (sum(selected.x)==0){ # go to addition step
-          # addition     
-          no <- length(candidate.add)
-          myoutput <- matrix(0, no, k+1)
-          i <- 1
-          for (x2 in 1:no){
-            full.x <- selected.x 
-            full.x[candidate.add[x2]] <- T
-            myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-            myoutput[i, k+1] <- summary(lm(y~1+as.matrix(X[,full.x])))$adj.r.squared
-            i <- i+1
-          }
-          location <- which.max(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          if (best.new > best.old)
-            selected.x <- myoutput[location,1:k]==1       
-        }
-        # if model has one or more variables
-        else { # go to deletion step first 
-          # deletion 
-          no <- length(candidate.remove)
-          myoutput <- matrix(0, no, k+1) 
-          i <- 1
-          for (x2 in 1:no){
-            reduced.x <- selected.x 
-            reduced.x[candidate.remove[x2]] <- F
-            myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-            {
-              if (sum(reduced.x)==0)
-                myoutput[i, k+1] <- summary(lm(y~1))$adj.r.squared
-              else 
-                myoutput[i, k+1] <- summary(lm(y~1+as.matrix(X[,reduced.x])))$adj.r.squared
-            }
-            i <- i+1
-          }
-          location <- which.max(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          {
-            if (best.new > best.old)  # in this case, we don't go to addition step. 
-              selected.x <- myoutput[location,1:k]==1 
-            else{ # no deletion, then go to addition step
-              # addition     
-              no <- length(candidate.add)
-              myoutput <- matrix(0, no, k+1)
-              i <- 1
-              for (x2 in 1:no){
-                full.x <- selected.x 
-                full.x[candidate.add[x2]] <- T
-                myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-                myoutput[i, k+1] <- summary(lm(y~1+as.matrix(X[,full.x])))$adj.r.squared
-                i <- i+1
-              }
-              location <- which.max(myoutput[,k+1])
-              best.new <- myoutput[location,k+1]
-              if (best.new > best.old)
-                selected.x <- myoutput[location,1:k]==1 
-            }
-          }
-        }
-      }
-    } # while
-    selected.x <- selected.x0 
-  } # end
- 
-  # MSE
-  
-  else if (method=="MSE"){
-    selected.x <- array(F,k)
-    selected.x0 <- array(T,k) 
-    selected.x00 <- array(T,k) 
-    best.new <- summary(lm(y~1))$sigma^2 
-    while (any(selected.x0 != selected.x) & any(selected.x00 != selected.x)){
-      selected.x00 <- selected.x0 
-      selected.x0 <- selected.x 
-      candidate.add <- which(selected.x==F)
-      candidate.remove <- which(selected.x==T)
-      best.old <- best.new
-      { # the first step (no variables in model)
-        if (sum(selected.x)==0){ # go to addition step
-          # addition     
-          no <- length(candidate.add)
-          myoutput <- matrix(0, no, k+1)
-          i <- 1
-          for (x2 in 1:no){
-            full.x <- selected.x 
-            full.x[candidate.add[x2]] <- T
-            myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-            myoutput[i, k+1] <- summary(lm(y~1+as.matrix(X[,full.x])))$sigma^2
-            i <- i+1
-          }
-          location <- which.min(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          if (best.new < best.old)
-            selected.x <- myoutput[location,1:k]==1       
-        }
-        # if model has one or more variables
-        else { # go to deletion step first 
-          # deletion 
-          no <- length(candidate.remove)
-          myoutput <- matrix(0, no, k+1) 
-          i <- 1
-          for (x2 in 1:no){
-            reduced.x <- selected.x 
-            reduced.x[candidate.remove[x2]] <- F
-            myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-            {
-              if (sum(reduced.x)==0)
-                myoutput[i, k+1] <- summary(lm(y~1))$sigma^2
-              else 
-                myoutput[i, k+1] <- summary(lm(y~1+as.matrix(X[,reduced.x])))$sigma^2
-            }
-            i <- i+1
-          }
-          location <- which.min(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          {
-            if (best.new < best.old)  # in this case, we don't go to addition step. 
-              selected.x <- myoutput[location,1:k]==1 
-            else{ # no deletion, then go to addition step
-              # addition     
-              no <- length(candidate.add)
-              myoutput <- matrix(0, no, k+1)
-              i <- 1
-              for (x2 in 1:no){
-                full.x <- selected.x 
-                full.x[candidate.add[x2]] <- T
-                myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-                myoutput[i, k+1] <- summary(lm(y~1+as.matrix(X[,full.x])))$sigma^2
-                i <- i+1
-              }
-              location <- which.min(myoutput[,k+1])
-              best.new <- myoutput[location,k+1]
-              if (best.new < best.old)
-                selected.x <- myoutput[location,1:k]==1 
-            }
-          }
-        }
-      }
-    } # while
-    selected.x <- selected.x0 
-  } # end
- 
-  # AIC
-  
-  else if (method=="AIC"){
-    selected.x <- array(F,k)
-    selected.x0 <- array(T,k) 
-    selected.x00 <- array(T,k) 
-    best.new <- AIC(lm(y~1))
-    while (any(selected.x0 != selected.x) & any(selected.x00 != selected.x)){
-      selected.x00 <- selected.x0 
-      selected.x0 <- selected.x 
-      candidate.add <- which(selected.x==F)
-      candidate.remove <- which(selected.x==T)
-      best.old <- best.new
-      { # the first step (no variables in model)
-        if (sum(selected.x)==0){ # go to addition step
-          # addition     
-          no <- length(candidate.add)
-          myoutput <- matrix(0, no, k+1)
-          i <- 1
-          for (x2 in 1:no){
-            full.x <- selected.x 
-            full.x[candidate.add[x2]] <- T
-            myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-            myoutput[i, k+1] <- AIC(lm(y~1+as.matrix(X[,full.x])))
-            i <- i+1
-          }
-          location <- which.min(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          if (best.new < best.old)
-            selected.x <- myoutput[location,1:k]==1       
-        }
-        # if model has one or more variables
-        else { # go to deletion step first 
-          # deletion 
-          no <- length(candidate.remove)
-          myoutput <- matrix(0, no, k+1) 
-          i <- 1
-          for (x2 in 1:no){
-            reduced.x <- selected.x 
-            reduced.x[candidate.remove[x2]] <- F
-            myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-            {
-              if (sum(reduced.x)==0)
-                myoutput[i, k+1] <- AIC(lm(y~1))
-              else 
-                myoutput[i, k+1] <- AIC(lm(y~1+as.matrix(X[,reduced.x])))
-            }
-            i <- i+1
-          }
-          location <- which.min(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          {
-            if (best.new < best.old)  # in this case, we don't go to addition step. 
-              selected.x <- myoutput[location,1:k]==1 
-            else{ # no deletion, then go to addition step
-              # addition     
-              no <- length(candidate.add)
-              myoutput <- matrix(0, no, k+1)
-              i <- 1
-              for (x2 in 1:no){
-                full.x <- selected.x 
-                full.x[candidate.add[x2]] <- T
-                myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-                myoutput[i, k+1] <- AIC(lm(y~1+as.matrix(X[,full.x])))
-                i <- i+1
-              }
-              location <- which.min(myoutput[,k+1])
-              best.new <- myoutput[location,k+1]
-              if (best.new < best.old)
-                selected.x <- myoutput[location,1:k]==1 
-            }
-          }
-        }
-      }
-    } # while
-    selected.x <- selected.x0 
-  } # end
- 
-  # BIC
-  
-  else {  # method=="BIC"
-    selected.x <- array(F,k)
-    selected.x0 <- array(T,k) 
-    selected.x00 <- array(T,k) 
-    best.new <- BIC(lm(y~1))
-    while (any(selected.x0 != selected.x) & any(selected.x00 != selected.x)){
-      selected.x00 <- selected.x0 
-      selected.x0 <- selected.x 
-      candidate.add <- which(selected.x==F)
-      candidate.remove <- which(selected.x==T)
-      best.old <- best.new
-      { # the first step (no variables in model)
-        if (sum(selected.x)==0){ # go to addition step
-          # addition     
-          no <- length(candidate.add)
-          myoutput <- matrix(0, no, k+1)
-          i <- 1
-          for (x2 in 1:no){
-            full.x <- selected.x 
-            full.x[candidate.add[x2]] <- T
-            myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-            myoutput[i, k+1] <- BIC(lm(y~1+as.matrix(X[,full.x])))
-            i <- i+1
-          }
-          location <- which.min(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          if (best.new < best.old)
-            selected.x <- myoutput[location,1:k]==1       
-        }
-        # if model has one or more variables
-        else { # go to deletion step first 
-          # deletion 
-          no <- length(candidate.remove)
-          myoutput <- matrix(0, no, k+1) 
-          i <- 1
-          for (x2 in 1:no){
-            reduced.x <- selected.x 
-            reduced.x[candidate.remove[x2]] <- F
-            myoutput[i, 1:k] <- reduced.x  # 1=included, 0=excluded
-            {
-              if (sum(reduced.x)==0)
-                myoutput[i, k+1] <- BIC(lm(y~1))
-              else 
-                myoutput[i, k+1] <- BIC(lm(y~1+as.matrix(X[,reduced.x])))
-            }
-            i <- i+1
-          }
-          location <- which.min(myoutput[,k+1])
-          best.new <- myoutput[location,k+1]
-          {
-            if (best.new < best.old)  # in this case, we don't go to addition step. 
-              selected.x <- myoutput[location,1:k]==1 
-            else{ # no deletion, then go to addition step
-              # addition     
-              no <- length(candidate.add)
-              myoutput <- matrix(0, no, k+1)
-              i <- 1
-              for (x2 in 1:no){
-                full.x <- selected.x 
-                full.x[candidate.add[x2]] <- T
-                myoutput[i, 1:k] <- full.x  # 1=included, 0=excluded
-                myoutput[i, k+1] <- BIC(lm(y~1+as.matrix(X[,full.x])))
-                i <- i+1
-              }
-              location <- which.min(myoutput[,k+1])
-              best.new <- myoutput[location,k+1]
-              if (best.new < best.old)
-                selected.x <- myoutput[location,1:k]==1 
-            }
-          }
-        }
-      }
-    } # while
-    selected.x <- selected.x0 
-  } # end
-  
-  # for all
-  selected.x <- as.matrix(selected.x,k,1)
-  rownames(selected.x) <- colnames(X)
-  return(selected.x) 
-}
-```
 
 # Introduction
 
-The aims of this project are to simulate multivariate data from underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for every underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods. Finally, we use mean and median Mean Square Error to compare performances. The following models will be compared. The immediate next step for this project is to add performance metrics such as AIC and BIC in addition to the mean and median MSE to better capture model performances. I also want to vectorize all loops and generally reduce redudant variable storage where possible.
+The aims of this project are to simulate multivariate data from underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for every underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods. Finally, we use mean and median Mean Square Error to compare performances. The following models will be compared. The immediate next step for this project is to add performance metrics such as AIC and BIC in addition to the mean and median MSE to better capture model performances. I also want to vectorize all loops and generally reduce redundant variable storage where possible.
 
 * Ordinary Least Squares Regression (No Variable Selection)
 * LASSO Regression
@@ -877,6 +102,14 @@ y_n_simul1 <- list()
 for(i in 1:n_simul1){
   y_n_simul1[[i]] <-  X_n_simul1[[i]] %*% beta1 + epsilon1
 }
+
+# Create Full Datasets
+data1 <- list()
+for(i in 1:n_simul1){
+  data1[[i]] <-  data.frame(cbind(y_n_simul1[[i]],X_n_simul1[[i]]))
+  colnames(data1[[i]]) <- c("Y","X1","X2","X3","X4","X5","X6","X7","X8")
+}
+
 ```
 
 ## Underlying Model 2
@@ -906,6 +139,13 @@ epsilon2 <- rnorm(n_obs2,mean = 0,sd = sigma2)
 y_n_simul2 <- list()
 for(i in 1:n_simul2){
   y_n_simul2[[i]] <-  X_n_simul2[[i]] %*% beta2 + epsilon2
+}
+
+# Create Full Datasets
+data2 <- list()
+for(i in 1:n_simul2){
+  data2[[i]] <-  data.frame(cbind(y_n_simul2[[i]],X_n_simul2[[i]]))
+  colnames(data2[[i]]) <- c("Y","X1","X2","X3","X4","X5","X6","X7","X8")
 }
 ```
 
@@ -938,11 +178,18 @@ y_n_simul3 <- list()
 for(i in 1:n_simul3){
   y_n_simul3[[i]] <-  X_n_simul3[[i]] %*% beta3 + epsilon3
 }
+
+# Create Full Datasets
+data3 <- list()
+for(i in 1:n_simul3){
+  data3[[i]] <-  data.frame(cbind(y_n_simul3[[i]],X_n_simul3[[i]]))
+  colnames(data3[[i]]) <- c("Y","X1","X2","X3","X4","X5","X6","X7","X8")
+}
 ```
 
 # Fitting Models
 
-In this section, we fit the regression models and measure performance for each underlying model
+In this section, we fit the regression models and measure performance for each underlying model. For LASSO and Ridge we use the glmnet R package, and all-possible, forward, backward, and stepwise selection we use the olsrr package.
 
 ## OLS Regression
 
@@ -955,40 +202,86 @@ $$
 R-Implementation:
 ```{r}
 #Underlying Model 1
-OLS_MSE_Data1 <- vector(length = n_simul1)
+OLS_AIC_Data1 <- vector(length = n_simul1)
+OLS_BIC_Data1 <- vector(length = n_simul1)
+OLS_R2_Data1 <- vector(length = n_simul1)
+
 
 for(i in 1:n_simul1){
   OLS_fit1 <- lm(y_n_simul1[[i]]~X_n_simul1[[i]])
-  OLS_MSE_Data1[i] <-  get_mse(OLS_fit1,var.estimate = FALSE)
+  OLS_AIC_Data1[i] <-  AIC(OLS_fit1)
+  OLS_BIC_Data1[i] <-  BIC(OLS_fit1)
+  OLS_R2_Data1[i] <- summary(OLS_fit1)$adj.r.squared
 }
 
-mean_OLS_MSE_Data1 <- mean(OLS_MSE_Data1)
-median_OLS_MSE_Data1 <- median(OLS_MSE_Data1)
-OLS_row1 <- cbind("OLS",mean_OLS_MSE_Data1,median_OLS_MSE_Data1)
+mean_OLS_AIC_Data1 <- mean(OLS_AIC_Data1)
+mean_OLS_BIC_Data1 <- mean(OLS_BIC_Data1)
+mean_OLS_R2_Data1 <- mean(OLS_R2_Data1)
+
+med_OLS_AIC_Data1 <- median(OLS_AIC_Data1)
+med_OLS_BIC_Data1 <- median(OLS_BIC_Data1)
+med_OLS_R2_Data1 <- median(OLS_R2_Data1)
+
+OLS_row1 <- cbind("OLS", mean_OLS_AIC_Data1,
+                  mean_OLS_BIC_Data1,
+                  mean_OLS_R2_Data1,
+                  med_OLS_AIC_Data1,
+                  med_OLS_BIC_Data1,
+                  med_OLS_R2_Data1)
 
 #Underlying Model 2
-OLS_MSE_Data2 <- vector(length = n_simul2)
+OLS_AIC_Data2 <- vector(length = n_simul2)
+OLS_BIC_Data2 <- vector(length = n_simul2)
+OLS_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
   OLS_fit2 <- lm(y_n_simul2[[i]]~X_n_simul2[[i]])
-  OLS_MSE_Data2[i] <-  get_mse(OLS_fit2,var.estimate = FALSE)
+  OLS_AIC_Data2[i] <-  AIC(OLS_fit2)
+  OLS_BIC_Data2[i] <-  BIC(OLS_fit2)
+  OLS_R2_Data2[i] <- summary(OLS_fit2)$adj.r.squared
 }
 
-mean_OLS_MSE_Data2 <- mean(OLS_MSE_Data2)
-median_OLS_MSE_Data2 <- median(OLS_MSE_Data2)
-OLS_row2 <- cbind("OLS",mean_OLS_MSE_Data2,median_OLS_MSE_Data2)
+mean_OLS_AIC_Data2 <- mean(OLS_AIC_Data2)
+mean_OLS_BIC_Data2 <- mean(OLS_BIC_Data2)
+mean_OLS_R2_Data2 <- mean(OLS_R2_Data2)
+
+med_OLS_AIC_Data2 <- median(OLS_AIC_Data2)
+med_OLS_BIC_Data2 <- median(OLS_BIC_Data2)
+med_OLS_R2_Data2 <- median(OLS_R2_Data2)
+
+OLS_row2 <- cbind("OLS", mean_OLS_AIC_Data2,
+                  mean_OLS_BIC_Data2,
+                  mean_OLS_R2_Data2,
+                  med_OLS_AIC_Data2,
+                  med_OLS_BIC_Data2,
+                  med_OLS_R2_Data2)
 
 #Underlying Model 3
-OLS_MSE_Data3 <- vector(length = n_simul3)
+OLS_AIC_Data3 <- vector(length = n_simul3)
+OLS_BIC_Data3 <- vector(length = n_simul3)
+OLS_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
   OLS_fit3 <- lm(y_n_simul3[[i]]~X_n_simul3[[i]])
-  OLS_MSE_Data3[i] <-  get_mse(OLS_fit3,var.estimate = FALSE)
+  OLS_AIC_Data3[i] <-  AIC(OLS_fit3)
+  OLS_BIC_Data3[i] <-  BIC(OLS_fit3)
+  OLS_R2_Data3[i] <- summary(OLS_fit3)$adj.r.squared
 }
 
-mean_OLS_MSE_Data3 <- mean(OLS_MSE_Data3)
-median_OLS_MSE_Data3 <- median(OLS_MSE_Data3)
-OLS_row3 <- cbind("OLS",mean_OLS_MSE_Data3,median_OLS_MSE_Data3)
+mean_OLS_AIC_Data3 <- mean(OLS_AIC_Data3)
+mean_OLS_BIC_Data3 <- mean(OLS_BIC_Data3)
+mean_OLS_R2_Data3 <- mean(OLS_R2_Data3)
+
+med_OLS_AIC_Data3 <- median(OLS_AIC_Data3)
+med_OLS_BIC_Data3 <- median(OLS_BIC_Data3)
+med_OLS_R2_Data3 <- median(OLS_R2_Data3)
+
+OLS_row3 <- cbind("OLS", mean_OLS_AIC_Data3,
+                  mean_OLS_BIC_Data3,
+                  mean_OLS_R2_Data3,
+                  med_OLS_AIC_Data3,
+                  med_OLS_BIC_Data3,
+                  med_OLS_R2_Data3)
 ```
 
 ## LASSO Regression
@@ -1002,52 +295,100 @@ $$
 R-Implementation:
 ```{r}
 #Underlying Model 1
-LASSO_MSE_Data1 <- vector(length = n_simul1)
+LASSO_AIC_Data1 <- vector(length = n_simul1)
+LASSO_BIC_Data1 <- vector(length = n_simul1)
+LASSO_R2_Data1 <- vector(length = n_simul1)
 
 for(i in 1:n_simul1){
   lasso_fit1 = glmnet(X_n_simul1[[i]], y_n_simul1[[i]], alpha = 1, family="gaussian")
-  crossval1 = cv.glmnet(X_n_simul1[[i]], y_n_simul1[[i]],
-                       alpha = 1, nfolds = 10,grouped = FALSE)
-  lambda1 = crossval1$lambda.min
-  y_hat1 = predict(lasso_fit1, s = lambda1, newx = X_n_simul1[[i]])
-  LASSO_MSE_Data1[i] <- mean((y_hat1 - y_n_simul1[[i]])^2)
+  
+  tLL <- lasso_fit1$nulldev - deviance(lasso_fit1)
+  k <- lasso_fit1$df
+  n <- lasso_fit1$nobs
+  
+  LASSO_AIC_Data1[i] <- tail(-tLL+2*k+2*k*(k+1)/(n-k-1),n=1)
+  LASSO_BIC_Data1[i] <- tail(log(n)*k - tLL,n=1)
+  LASSO_R2_Data1[i] <- tail(lasso_fit1$dev.ratio,n=1)
 }
 
-mean_LASSO_MSE_Data1 <- mean(LASSO_MSE_Data1)
-median_LASSO_MSE_Data1 <- median(LASSO_MSE_Data1)
-LASSO_row1 <- cbind("LASSO",mean_LASSO_MSE_Data1, median_LASSO_MSE_Data1)
+mean_LASSO_AIC_Data1 <- mean(LASSO_AIC_Data1)
+mean_LASSO_BIC_Data1 <- mean(LASSO_BIC_Data1)
+mean_LASSO_R2_Data1 <- mean(LASSO_R2_Data1)
+
+med_LASSO_AIC_Data1 <- median(LASSO_AIC_Data1)
+med_LASSO_BIC_Data1 <- median(LASSO_BIC_Data1)
+med_LASSO_R2_Data1 <- median(LASSO_R2_Data1)
+
+LASSO_row1 <- cbind("LASSO", mean_LASSO_AIC_Data1,
+                  mean_LASSO_BIC_Data1,
+                  mean_LASSO_R2_Data1,
+                  med_LASSO_AIC_Data1,
+                  med_LASSO_BIC_Data1,
+                  med_LASSO_R2_Data1)
 
 #Underlying Model 2
-LASSO_MSE_Data2 <- vector(length = n_simul2)
+LASSO_AIC_Data2 <- vector(length = n_simul2)
+LASSO_BIC_Data2 <- vector(length = n_simul2)
+LASSO_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
   lasso_fit2 = glmnet(X_n_simul2[[i]], y_n_simul2[[i]], alpha = 1, family="gaussian")
-  crossval2 = cv.glmnet(X_n_simul2[[i]], y_n_simul2[[i]],
-                       alpha = 1, nfolds = 10,grouped = FALSE)
-  lambda2 = crossval2$lambda.min
-  y_hat2 = predict(lasso_fit2, s = lambda2, newx = X_n_simul2[[i]])
-  LASSO_MSE_Data2[i] <- mean((y_hat2 - y_n_simul2[[i]])^2)
+  
+  tLL <- lasso_fit2$nulldev - deviance(lasso_fit2)
+  k <- lasso_fit2$df
+  n <- lasso_fit2$nobs
+  
+  LASSO_AIC_Data2[i] <- tail(-tLL+2*k+2*k*(k+1)/(n-k-1),n=1)
+  LASSO_BIC_Data2[i] <- tail(log(n)*k - tLL,n=1)
+  LASSO_R2_Data2[i] <- tail(lasso_fit2$dev.ratio,n=1)
 }
 
-mean_LASSO_MSE_Data2 <- mean(LASSO_MSE_Data2)
-median_LASSO_MSE_Data2 <- median(LASSO_MSE_Data2)
-LASSO_row2 <- cbind("LASSO",mean_LASSO_MSE_Data2, median_LASSO_MSE_Data2)
+mean_LASSO_AIC_Data2 <- mean(LASSO_AIC_Data2)
+mean_LASSO_BIC_Data2 <- mean(LASSO_BIC_Data2)
+mean_LASSO_R2_Data2 <- mean(LASSO_R2_Data2)
+
+med_LASSO_AIC_Data2 <- median(LASSO_AIC_Data2)
+med_LASSO_BIC_Data2 <- median(LASSO_BIC_Data2)
+med_LASSO_R2_Data2 <- median(LASSO_R2_Data2)
+
+LASSO_row2 <- cbind("LASSO", mean_LASSO_AIC_Data2,
+                  mean_LASSO_BIC_Data2,
+                  mean_LASSO_R2_Data2,
+                  med_LASSO_AIC_Data2,
+                  med_LASSO_BIC_Data2,
+                  med_LASSO_R2_Data2)
 
 #Underlying Model 3
-LASSO_MSE_Data3 <- vector(length = n_simul3)
+LASSO_AIC_Data3 <- vector(length = n_simul3)
+LASSO_BIC_Data3 <- vector(length = n_simul3)
+LASSO_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
   lasso_fit3 = glmnet(X_n_simul3[[i]], y_n_simul3[[i]], alpha = 1, family="gaussian")
-  crossval3 = cv.glmnet(X_n_simul3[[i]], y_n_simul3[[i]],
-                       alpha = 1, nfolds = 10,grouped = FALSE)
-  lambda3 = crossval3$lambda.min
-  y_hat3 = predict(lasso_fit3, s = lambda3, newx = X_n_simul3[[i]])
-  LASSO_MSE_Data3[i] <- mean((y_hat3 - y_n_simul3[[i]])^2)
+  
+  tLL <- lasso_fit3$nulldev - deviance(lasso_fit3)
+  k <- lasso_fit3$df
+  n <- lasso_fit3$nobs
+  
+  LASSO_AIC_Data3[i] <- tail(-tLL+2*k+2*k*(k+1)/(n-k-1),n=1)
+  LASSO_BIC_Data3[i] <- tail(log(n)*k - tLL,n=1)
+  LASSO_R2_Data3[i] <- tail(lasso_fit3$dev.ratio,n=1)
 }
 
-mean_LASSO_MSE_Data3 <- mean(LASSO_MSE_Data3)
-median_LASSO_MSE_Data3 <- median(LASSO_MSE_Data3)
-LASSO_row3 <- cbind("LASSO",mean_LASSO_MSE_Data3, median_LASSO_MSE_Data3)
+mean_LASSO_AIC_Data3 <- mean(LASSO_AIC_Data3)
+mean_LASSO_BIC_Data3 <- mean(LASSO_BIC_Data3)
+mean_LASSO_R2_Data3 <- mean(LASSO_R2_Data3)
+
+med_LASSO_AIC_Data3 <- median(LASSO_AIC_Data3)
+med_LASSO_BIC_Data3 <- median(LASSO_BIC_Data3)
+med_LASSO_R2_Data3 <- median(LASSO_R2_Data3)
+
+LASSO_row3 <- cbind("LASSO", mean_LASSO_AIC_Data3,
+                  mean_LASSO_BIC_Data3,
+                  mean_LASSO_R2_Data3,
+                  med_LASSO_AIC_Data3,
+                  med_LASSO_BIC_Data3,
+                  med_LASSO_R2_Data3)
 ```
 
 ## Ridge Regression
@@ -1060,52 +401,100 @@ $$
 R-Implementation:
 ```{r}
 #Underlying Model 1
-Ridge_MSE_Data1 <- vector(length = n_simul1)
+Rid_AIC_Data1 <- vector(length = n_simul1)
+Rid_BIC_Data1 <- vector(length = n_simul1)
+Rid_R2_Data1 <- vector(length = n_simul1)
 
 for(i in 1:n_simul1){
-  Ridge_fit1 = glmnet(X_n_simul1[[i]], y_n_simul1[[i]], alpha = 0, family="gaussian")
-  crossval1 = cv.glmnet(X_n_simul1[[i]], y_n_simul1[[i]],
-                       alpha = 0, nfolds = 10,grouped = FALSE)
-  lambda1 = crossval1$lambda.min
-  y_hat1 = predict(Ridge_fit1, s = lambda1, newx = X_n_simul1[[i]])
-  Ridge_MSE_Data1[i] <- mean((y_hat1 - y_n_simul1[[i]])^2)
+  Rid_fit1 = glmnet(X_n_simul1[[i]], y_n_simul1[[i]], alpha = 0, family="gaussian")
+  
+  tLL <- Rid_fit1$nulldev - deviance(Rid_fit1)
+  k <- Rid_fit1$df
+  n <- Rid_fit1$nobs
+  
+  Rid_AIC_Data1[i] <- tail(-tLL+2*k+2*k*(k+1)/(n-k-1),n=1)
+  Rid_BIC_Data1[i] <- tail(log(n)*k - tLL,n=1)
+  Rid_R2_Data1[i] <- tail(Rid_fit1$dev.ratio,n=1)
 }
 
-mean_Ridge_MSE_Data1 <- mean(Ridge_MSE_Data1)
-median_Ridge_MSE_Data1 <- median(Ridge_MSE_Data1)
-Ridge_row1 <- cbind("Ridge",mean_Ridge_MSE_Data1,median_Ridge_MSE_Data1)
+mean_Rid_AIC_Data1 <- mean(Rid_AIC_Data1)
+mean_Rid_BIC_Data1 <- mean(Rid_BIC_Data1)
+mean_Rid_R2_Data1 <- mean(Rid_R2_Data1)
+
+med_Rid_AIC_Data1 <- median(Rid_AIC_Data1)
+med_Rid_BIC_Data1 <- median(Rid_BIC_Data1)
+med_Rid_R2_Data1 <- median(Rid_R2_Data1)
+
+Rid_row1 <- cbind("Ridge", mean_Rid_AIC_Data1,
+                  mean_Rid_BIC_Data1,
+                  mean_Rid_R2_Data1,
+                  med_Rid_AIC_Data1,
+                  med_Rid_BIC_Data1,
+                  med_Rid_R2_Data1)
 
 #Underlying Model 2
-Ridge_MSE_Data2 <- vector(length = n_simul2)
+Rid_AIC_Data2 <- vector(length = n_simul2)
+Rid_BIC_Data2 <- vector(length = n_simul2)
+Rid_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
-  Ridge_fit2 = glmnet(X_n_simul2[[i]], y_n_simul2[[i]], alpha = 0, family="gaussian")
-  crossval2 = cv.glmnet(X_n_simul2[[i]], y_n_simul2[[i]],
-                       alpha = 0, nfolds = 10,grouped = FALSE)
-  lambda2 = crossval2$lambda.min
-  y_hat2 = predict(Ridge_fit2, s = lambda2, newx = X_n_simul2[[i]])
-  Ridge_MSE_Data2[i] <- mean((y_hat2 - y_n_simul2[[i]])^2)
+  Rid_fit2 = glmnet(X_n_simul2[[i]], y_n_simul2[[i]], alpha = 0, family="gaussian")
+  
+  tLL <- Rid_fit2$nulldev - deviance(Rid_fit2)
+  k <- Rid_fit2$df
+  n <- Rid_fit2$nobs
+  
+  Rid_AIC_Data2[i] <- tail(-tLL+2*k+2*k*(k+1)/(n-k-1),n=1)
+  Rid_BIC_Data2[i] <- tail(log(n)*k - tLL,n=1)
+  Rid_R2_Data2[i] <- tail(Rid_fit2$dev.ratio,n=1)
 }
 
-mean_Ridge_MSE_Data2 <- mean(Ridge_MSE_Data2)
-median_Ridge_MSE_Data2 <- median(Ridge_MSE_Data2)
-Ridge_row2 <- cbind("Ridge",mean_Ridge_MSE_Data2,median_Ridge_MSE_Data2)
+mean_Rid_AIC_Data2 <- mean(Rid_AIC_Data2)
+mean_Rid_BIC_Data2 <- mean(Rid_BIC_Data2)
+mean_Rid_R2_Data2 <- mean(Rid_R2_Data2)
+
+med_Rid_AIC_Data2 <- median(Rid_AIC_Data2)
+med_Rid_BIC_Data2 <- median(Rid_BIC_Data2)
+med_Rid_R2_Data2 <- median(Rid_R2_Data2)
+
+Rid_row2 <- cbind("Ridge", mean_Rid_AIC_Data2,
+                  mean_Rid_BIC_Data2,
+                  mean_Rid_R2_Data2,
+                  med_Rid_AIC_Data2,
+                  med_Rid_BIC_Data2,
+                  med_Rid_R2_Data2)
 
 #Underlying Model 3
-Ridge_MSE_Data3 <- vector(length = n_simul3)
+Rid_AIC_Data3 <- vector(length = n_simul3)
+Rid_BIC_Data3 <- vector(length = n_simul3)
+Rid_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
-  Ridge_fit3 = glmnet(X_n_simul3[[i]], y_n_simul3[[i]], alpha = 0, family="gaussian")
-  crossval3 = cv.glmnet(X_n_simul3[[i]], y_n_simul3[[i]],
-                       alpha = 0, nfolds = 10,grouped = FALSE)
-  lambda3 = crossval3$lambda.min
-  y_hat3 = predict(Ridge_fit3, s = lambda3, newx = X_n_simul3[[i]])
-  Ridge_MSE_Data3[i] <- mean((y_hat3 - y_n_simul3[[i]])^2)
+  Rid_fit3 = glmnet(X_n_simul3[[i]], y_n_simul3[[i]], alpha = 0, family="gaussian")
+  
+  tLL <- Rid_fit3$nulldev - deviance(Rid_fit3)
+  k <- Rid_fit3$df
+  n <- Rid_fit3$nobs
+  
+  Rid_AIC_Data3[i] <- tail(-tLL+2*k+2*k*(k+1)/(n-k-1),n=1)
+  Rid_BIC_Data3[i] <- tail(log(n)*k - tLL,n=1)
+  Rid_R2_Data3[i] <- tail(Rid_fit3$dev.ratio,n=1)
 }
 
-mean_Ridge_MSE_Data3 <- mean(Ridge_MSE_Data3)
-median_Ridge_MSE_Data3 <- median(Ridge_MSE_Data3)
-Ridge_row3 <- cbind("Ridge",mean_Ridge_MSE_Data3,median_Ridge_MSE_Data3)
+mean_Rid_AIC_Data3 <- mean(Rid_AIC_Data3)
+mean_Rid_BIC_Data3 <- mean(Rid_BIC_Data3)
+mean_Rid_R2_Data3 <- mean(Rid_R2_Data3)
+
+med_Rid_AIC_Data3 <- median(Rid_AIC_Data3)
+med_Rid_BIC_Data3 <- median(Rid_BIC_Data3)
+med_Rid_R2_Data3 <- median(Rid_R2_Data3)
+
+Rid_row3 <- cbind("Ridge", mean_Rid_AIC_Data3,
+                  mean_Rid_BIC_Data3,
+                  mean_Rid_R2_Data3,
+                  med_Rid_AIC_Data3,
+                  med_Rid_BIC_Data3,
+                  med_Rid_R2_Data3)
 ```
 
 ## All Possible Regression
@@ -1115,52 +504,88 @@ We now fit All Possible Regression Models, measure model performances, and outli
 R-Implementation:
 ```{r}
 # Underlying Model 1
-All_possible_MSE_Data1 <- list()
+All_AIC_Data1 <- vector(length = n_simul1)
+All_BIC_Data1 <- vector(length = n_simul1)
+All_R2_Data1 <- vector(length = n_simul1)
 
 for(i in 1:n_simul1){
-  sig1 <- allpossible(data.frame(X_n_simul1[[i]]),matrix(y_n_simul1[[i]]))$AIC==1
-  All_possible_fit1 <- lm(y_n_simul1[[i]] ~ X_n_simul1[[i]][,sig1]+0)
-  b1 = array(0,8)
-  b1[sig1] = coef(All_possible_fit1)
-  All_possible_MSE_Data1[[i]] <-  t(beta1-b1)%*%CovarMat1%*%(beta1-b1)
+  sig1 <- lm(Y~.,data=data1[[i]])
+  All_fit1 <- ols_step_all_possible(sig1)
+  All_AIC_Data1[i] <- min(All_fit1$aic)
+  All_BIC_Data1[i] <- min(All_fit1$sbc)
+  All_R2_Data1[i] <-  max(All_fit1$adjr)
 }
 
-mean_All_possible_MSE_Data1 <- mean(unlist(All_possible_MSE_Data1))
-median_All_possible_MSE_Data1 <- median(unlist(All_possible_MSE_Data1))
-All_possible_row1 <- cbind("All possible Regression",
-                         mean_All_possible_MSE_Data1,median_All_possible_MSE_Data1)
+mean_All_AIC_Data1 <- mean(All_AIC_Data1)
+mean_All_BIC_Data1 <- mean(All_BIC_Data1)
+mean_All_R2_Data1 <- mean(All_R2_Data1)
+
+med_All_AIC_Data1 <- median(All_AIC_Data1)
+med_All_BIC_Data1 <- median(All_BIC_Data1)
+med_All_R2_Data1 <- median(All_R2_Data1)
+
+All_row1 <- cbind("All-Possible Regression", mean_All_AIC_Data1,
+                  mean_All_BIC_Data1,
+                  mean_All_R2_Data1,
+                  med_All_AIC_Data1,
+                  med_All_BIC_Data1,
+                  med_All_R2_Data1)
 
 # Underlying Model 2
-All_possible_MSE_Data2 <- list()
+All_AIC_Data2 <- vector(length = n_simul2)
+All_BIC_Data2 <- vector(length = n_simul2)
+All_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
-  sig2 <- allpossible(data.frame(X_n_simul2[[i]]),matrix(y_n_simul2[[i]]))$AIC==1
-  All_possible_fit2 <- lm(y_n_simul2[[i]] ~ X_n_simul2[[i]][,sig2]+0)
-  b2 = array(0,8)
-  b2[sig2] = coef(All_possible_fit2)
-  All_possible_MSE_Data2[[i]] <-  t(beta2-b2)%*%CovarMat2%*%(beta2-b2)
+  sig2 <- lm(Y~.,data=data2[[i]])
+  All_fit2 <- ols_step_all_possible(sig2)
+  All_AIC_Data2[i] <- min(All_fit2$aic)
+  All_BIC_Data2[i] <- min(All_fit2$sbc)
+  All_R2_Data2[i] <-  max(All_fit2$adjr)
 }
 
-mean_All_possible_MSE_Data2 <- mean(unlist(All_possible_MSE_Data2))
-median_All_possible_MSE_Data2 <- median(unlist(All_possible_MSE_Data2))
-All_possible_row2<- cbind("All possible Regression",
-                         mean_All_possible_MSE_Data2,median_All_possible_MSE_Data2)
+mean_All_AIC_Data2 <- mean(All_AIC_Data2)
+mean_All_BIC_Data2 <- mean(All_BIC_Data2)
+mean_All_R2_Data2 <- mean(All_R2_Data2)
+
+med_All_AIC_Data2 <- median(All_AIC_Data2)
+med_All_BIC_Data2 <- median(All_BIC_Data2)
+med_All_R2_Data2 <- median(All_R2_Data2)
+
+All_row2 <- cbind("All-Possible Regression", mean_All_AIC_Data2,
+                  mean_All_BIC_Data2,
+                  mean_All_R2_Data2,
+                  med_All_AIC_Data2,
+                  med_All_BIC_Data2,
+                  med_All_R2_Data2)
 
 # Underlying Model 3
-All_possible_MSE_Data3 <- list()
+All_AIC_Data3 <- vector(length = n_simul3)
+All_BIC_Data3 <- vector(length = n_simul3)
+All_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
-  sig3 <- allpossible(data.frame(X_n_simul3[[i]]),matrix(y_n_simul3[[i]]))$AIC==1
-  All_possible_fit3 <- lm(y_n_simul3[[i]] ~ X_n_simul3[[i]][,sig3]+0)
-  b3 = array(0,8)
-  b3[sig3] = coef(All_possible_fit3)
-  All_possible_MSE_Data3[[i]] <-  t(beta3-b3)%*%CovarMat3%*%(beta3-b3)
+  sig3 <- lm(Y~.,data=data3[[i]])
+  All_fit3 <- ols_step_all_possible(sig3)
+  All_AIC_Data3[i] <- min(All_fit3$aic)
+  All_BIC_Data3[i] <- min(All_fit3$sbc)
+  All_R2_Data3[i] <-  max(All_fit3$adjr)
 }
 
-mean_All_possible_MSE_Data3 <- mean(unlist(All_possible_MSE_Data3))
-median_All_possible_MSE_Data3 <- median(unlist(All_possible_MSE_Data3))
-All_possible_row3<- cbind("All possible Regression",
-                         mean_All_possible_MSE_Data3,median_All_possible_MSE_Data3)
+mean_All_AIC_Data3 <- mean(All_AIC_Data3)
+mean_All_BIC_Data3 <- mean(All_BIC_Data3)
+mean_All_R2_Data3 <- mean(All_R2_Data3)
+
+med_All_AIC_Data3 <- median(All_AIC_Data3)
+med_All_BIC_Data3 <- median(All_BIC_Data3)
+med_All_R2_Data3 <- median(All_R2_Data3)
+
+All_row3 <- cbind("All-Possible Regression", mean_All_AIC_Data3,
+                  mean_All_BIC_Data3,
+                  mean_All_R2_Data3,
+                  med_All_AIC_Data3,
+                  med_All_BIC_Data3,
+                  med_All_R2_Data3)
 ```
 
 ## Forward Selection
@@ -1173,54 +598,93 @@ $$
 R-Implementation:
 ```{r}
 #Underlying Model 1
-forward_MSE_Data1 <- list()
+For_AIC_Data1 <- vector(length = n_simul1)
+For_BIC_Data1 <- vector(length = n_simul1)
+For_R2_Data1 <- vector(length = n_simul1)
 
 for(i in 1:n_simul1){
-  sig1 <- forward(data.frame(X_n_simul1[[i]]),matrix(y_n_simul1[[i]]),"BIC",slentry = 0.5)
-  forward_fit1 <- lm(y_n_simul1[[i]] ~ X_n_simul1[[i]][,sig1]+0)
-  b1 = array(0,8)
-  b1[sig1] = coef(forward_fit1)
-  forward_MSE_Data1[[i]] <-   t(beta1-b1)%*%CovarMat1%*%(beta1-b1)
+  sig1 <- lm(Y~.,data=data1[[i]])
+  For_fit1 <- ols_step_forward_p(sig1, penter = 0.5)
+  For_AIC_Data1[i] <- min(For_fit1$aic)
+  For_BIC_Data1[i] <- min(For_fit1$sbc)
+  For_R2_Data1[i] <-  max(For_fit1$adjr)
 }
 
-mean_forward_MSE_Data1 <- mean(unlist(forward_MSE_Data1))
-median_forward_MSE_Data1 <- median(unlist(forward_MSE_Data1))
-forward_row1<- cbind("Forward Selection",mean_forward_MSE_Data1,median_forward_MSE_Data1)
+mean_For_AIC_Data1 <- mean(For_AIC_Data1)
+mean_For_BIC_Data1 <- mean(For_BIC_Data1)
+mean_For_R2_Data1 <- mean(For_R2_Data1)
+
+med_For_AIC_Data1 <- median(For_AIC_Data1)
+med_For_BIC_Data1 <- median(For_BIC_Data1)
+med_For_R2_Data1 <- median(For_R2_Data1)
+
+For_row1 <- cbind("Forward Selection", mean_For_AIC_Data1,
+                  mean_For_BIC_Data1,
+                  mean_For_R2_Data1,
+                  med_For_AIC_Data1,
+                  med_For_BIC_Data1,
+                  med_For_R2_Data1)
 
 #Underlying Model 2
-forward_MSE_Data2 <- list()
+For_AIC_Data2 <- vector(length = n_simul2)
+For_BIC_Data2 <- vector(length = n_simul2)
+For_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
-  sig2 <- forward(data.frame(X_n_simul2[[i]]),matrix(y_n_simul2[[i]]),"BIC",slentry = 0.5)
-  forward_fit2 <- lm(y_n_simul2[[i]] ~ X_n_simul2[[i]][,sig2]+0)
-  b2 = array(0,8)
-  b2[sig2] = coef(forward_fit2)
-  forward_MSE_Data2[[i]] <-   t(beta2-b2)%*%CovarMat2%*%(beta2-b2)
+  sig2 <- lm(Y~.,data=data2[[i]])
+  For_fit2 <- ols_step_forward_p(sig2, penter = 0.5)
+  For_AIC_Data2[i] <- min(For_fit2$aic)
+  For_BIC_Data2[i] <- min(For_fit2$sbc)
+  For_R2_Data2[i] <-  max(For_fit2$adjr)
 }
 
-mean_forward_MSE_Data2 <- mean(unlist(forward_MSE_Data2))
-median_forward_MSE_Data2 <- median(unlist(forward_MSE_Data2))
-forward_row2<- cbind("Forward Selection",mean_forward_MSE_Data2,median_forward_MSE_Data2)
+mean_For_AIC_Data2 <- mean(For_AIC_Data2)
+mean_For_BIC_Data2 <- mean(For_BIC_Data2)
+mean_For_R2_Data2 <- mean(For_R2_Data2)
+
+med_For_AIC_Data2 <- median(For_AIC_Data2)
+med_For_BIC_Data2 <- median(For_BIC_Data2)
+med_For_R2_Data2 <- median(For_R2_Data2)
+
+For_row2 <- cbind("Forward Selection", mean_For_AIC_Data2,
+                  mean_For_BIC_Data2,
+                  mean_For_R2_Data2,
+                  med_For_AIC_Data2,
+                  med_For_BIC_Data2,
+                  med_For_R2_Data2)
 
 #Underlying Model 3
-forward_MSE_Data3 <- list()
+For_AIC_Data3 <- vector(length = n_simul3)
+For_BIC_Data3 <- vector(length = n_simul3)
+For_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
-  sig3 <- forward(data.frame(X_n_simul3[[i]]),matrix(y_n_simul3[[i]]),"BIC",slentry = 0.5)
-  forward_fit3 <- lm(y_n_simul3[[i]] ~ X_n_simul3[[i]][,sig3]+0)
-  b3 = array(0,8)
-  b3[sig3] = coef(forward_fit3)
-  forward_MSE_Data3[[i]] <-   t(beta3-b3)%*%CovarMat3%*%(beta3-b3)
+  sig3 <- lm(Y~.,data=data3[[i]])
+  For_fit3 <- ols_step_forward_p(sig3, penter = 0.5)
+  For_AIC_Data3[i] <- min(For_fit3$aic)
+  For_BIC_Data3[i] <- min(For_fit3$sbc)
+  For_R2_Data3[i] <-  max(For_fit3$adjr)
 }
 
-mean_forward_MSE_Data3 <- mean(unlist(forward_MSE_Data3))
-median_forward_MSE_Data3 <- median(unlist(forward_MSE_Data3))
-forward_row3<- cbind("Forward Selection",mean_forward_MSE_Data3,median_forward_MSE_Data3)
+mean_For_AIC_Data3 <- mean(For_AIC_Data3)
+mean_For_BIC_Data3 <- mean(For_BIC_Data3)
+mean_For_R2_Data3 <- mean(For_R2_Data3)
+
+med_For_AIC_Data3 <- median(For_AIC_Data3)
+med_For_BIC_Data3 <- median(For_BIC_Data3)
+med_For_R2_Data3 <- median(For_R2_Data3)
+
+For_row3 <- cbind("Forward Selection", mean_For_AIC_Data3,
+                  mean_For_BIC_Data3,
+                  mean_For_R2_Data3,
+                  med_For_AIC_Data3,
+                  med_For_BIC_Data3,
+                  med_For_R2_Data3)
 ```
 
 ## Backward Elimination
 
-We now fit Backward Elimination Regression Models with a cutoff p-value of $0.1$ for the $F$-statistic outlined below, measure model performances, and outline the Forward Selection technnique. According to Hocking (1976) the Backward Elimination technique starts with all variables and eliminates one variable at a time from the equation until either all variables are out or a criteria to stop the technique is satisfied. Furthermore, the variable considered for exclusion at any step is the one yielding the smallest F-ratio among the variables being considered for exclusion if the F-ratio does not exceed a specified value. Thus, the variable $i$ is removed removed from the equation of $p$-terms if
+We now fit Backward Elimination Regression Models with a cutoff p-value of $0.1$ for the $F$-statistic outlined below, measure model performances, and outline the Forward Selection technique. According to Hocking (1976) the Backward Elimination technique starts with all variables and eliminates one variable at a time from the equation until either all variables are out or a criteria to stop the technique is satisfied. Furthermore, the variable considered for exclusion at any step is the one yielding the smallest F-ratio among the variables being considered for exclusion if the F-ratio does not exceed a specified value. Thus, the variable $i$ is removed removed from the equation of $p$-terms if
 
 $$
 F_{i} = \underset{i}{\min}\left(\frac{RSS_{p-i} - RSS_{p}}{\hat{\sigma}_{p}^2}\right) < F_{out}
@@ -1228,52 +692,88 @@ $$
 R-Implementation:
 ```{r}
 #Underlying Model 1
-backward_MSE_Data1 <- list()
+Back_AIC_Data1 <- vector(length = n_simul1)
+Back_BIC_Data1 <- vector(length = n_simul1)
+Back_R2_Data1 <- vector(length = n_simul1)
 
 for(i in 1:n_simul1){
-  sig1 <- backward(X_n_simul1[[i]],matrix(y_n_simul1[[i]]),"BIC",slstay = 0.10)
-  backward_fit1 <- lm(y_n_simul1[[i]] ~ X_n_simul1[[i]][,sig1]+0)
-  b1 = array(0,8)
-  b1[sig1] = coef(backward_fit1)
-  backward_MSE_Data1[[i]] <-   t(beta1-b1)%*%CovarMat1%*%(beta1-b1)
+  sig1 <- lm(Y~.,data=data1[[i]])
+  Back_fit1 <- ols_step_backward_p(sig1, prem = 0.1)
+  Back_AIC_Data1[i] <- min(Back_fit1$aic)
+  Back_BIC_Data1[i] <- min(Back_fit1$sbc)
+  Back_R2_Data1[i] <-  max(Back_fit1$adjr)
 }
 
-mean_backward_MSE_Data1 <- mean(unlist(backward_MSE_Data1))
-median_backward_MSE_Data1 <- median(unlist(backward_MSE_Data1))
-backward_row1<- cbind("Backward Elimination",mean_backward_MSE_Data1,
-                     median_backward_MSE_Data1)
+mean_Back_AIC_Data1 <- mean(Back_AIC_Data1)
+mean_Back_BIC_Data1 <- mean(Back_BIC_Data1)
+mean_Back_R2_Data1 <- mean(Back_R2_Data1)
+
+med_Back_AIC_Data1 <- median(Back_AIC_Data1)
+med_Back_BIC_Data1 <- median(Back_BIC_Data1)
+med_Back_R2_Data1 <- median(Back_R2_Data1)
+
+Back_row1 <- cbind("Backward Selection", mean_Back_AIC_Data1,
+                  mean_Back_BIC_Data1,
+                  mean_Back_R2_Data1,
+                  med_Back_AIC_Data1,
+                  med_Back_BIC_Data1,
+                  med_Back_R2_Data1)
 
 #Underlying Model 2
-backward_MSE_Data2 <- list()
+Back_AIC_Data2 <- vector(length = n_simul2)
+Back_BIC_Data2 <- vector(length = n_simul2)
+Back_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
-  sig2 <- backward(X_n_simul2[[i]],matrix(y_n_simul2[[i]]),"BIC",slstay = 0.10)
-  backward_fit2 <- lm(y_n_simul2[[i]] ~ X_n_simul2[[i]][,sig2]+0)
-  b2 = array(0,8)
-  b2[sig2] = coef(backward_fit2)
-  backward_MSE_Data2[[i]] <-   t(beta2-b2)%*%CovarMat2%*%(beta2-b2)
+  sig2 <- lm(Y~.,data=data2[[i]])
+  Back_fit2 <- ols_step_backward_p(sig2, prem = 0.1)
+  Back_AIC_Data2[i] <- min(Back_fit2$aic)
+  Back_BIC_Data2[i] <- min(Back_fit2$sbc)
+  Back_R2_Data2[i] <-  max(Back_fit2$adjr)
 }
 
-mean_backward_MSE_Data2 <- mean(unlist(backward_MSE_Data2))
-median_backward_MSE_Data2 <- median(unlist(backward_MSE_Data2))
-backward_row2<- cbind("Backward Elimination",mean_backward_MSE_Data2,
-                     median_backward_MSE_Data2)
+mean_Back_AIC_Data2 <- mean(Back_AIC_Data2)
+mean_Back_BIC_Data2 <- mean(Back_BIC_Data2)
+mean_Back_R2_Data2 <- mean(Back_R2_Data2)
+
+med_Back_AIC_Data2 <- median(Back_AIC_Data2)
+med_Back_BIC_Data2 <- median(Back_BIC_Data2)
+med_Back_R2_Data2 <- median(Back_R2_Data2)
+
+Back_row2 <- cbind("Backward Selection", mean_Back_AIC_Data2,
+                  mean_Back_BIC_Data2,
+                  mean_Back_R2_Data2,
+                  med_Back_AIC_Data2,
+                  med_Back_BIC_Data2,
+                  med_Back_R2_Data2)
 
 #Underlying Model 3
-backward_MSE_Data3 <- list()
+Back_AIC_Data3 <- vector(length = n_simul3)
+Back_BIC_Data3 <- vector(length = n_simul3)
+Back_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
-  sig3 <- backward(X_n_simul3[[i]],matrix(y_n_simul3[[i]]),"BIC",slstay = 0.10)
-  backward_fit3 <- lm(y_n_simul3[[i]] ~ X_n_simul3[[i]][,sig3]+0)
-  b3 = array(0,8)
-  b3[sig3] = coef(backward_fit3)
-  backward_MSE_Data3[[i]] <-   t(beta3-b3)%*%CovarMat3%*%(beta3-b3)
+  sig3 <- lm(Y~.,data=data3[[i]])
+  Back_fit3 <- ols_step_backward_p(sig3, prem = 0.1)
+  Back_AIC_Data3[i] <- min(Back_fit3$aic)
+  Back_BIC_Data3[i] <- min(Back_fit3$sbc)
+  Back_R2_Data3[i] <-  max(Back_fit3$adjr)
 }
 
-mean_backward_MSE_Data3 <- mean(unlist(backward_MSE_Data3))
-median_backward_MSE_Data3 <- median(unlist(backward_MSE_Data3))
-backward_row3<- cbind("Backward Elimination",mean_backward_MSE_Data3,
-                     median_backward_MSE_Data3)
+mean_Back_AIC_Data3 <- mean(Back_AIC_Data3)
+mean_Back_BIC_Data3 <- mean(Back_BIC_Data3)
+mean_Back_R2_Data3 <- mean(Back_R2_Data3)
+
+med_Back_AIC_Data3 <- median(Back_AIC_Data3)
+med_Back_BIC_Data3 <- median(Back_BIC_Data3)
+med_Back_R2_Data3 <- median(Back_R2_Data3)
+
+Back_row3 <- cbind("Backward Selection", mean_Back_AIC_Data3,
+                  mean_Back_BIC_Data3,
+                  mean_Back_R2_Data3,
+                  med_Back_AIC_Data3,
+                  med_Back_BIC_Data3,
+                  med_Back_R2_Data3)
 ```
 
 ## Stepwise Selection
@@ -1283,127 +783,161 @@ We now fit Stepwise Selection Regression Models with an entry cutoff p-value of 
 R-Implementation:
 ```{r}
 #Underlying Model 1
-stepwise_MSE_Data1 <- list()
+Step_AIC_Data1 <- vector(length = n_simul1)
+Step_BIC_Data1 <- vector(length = n_simul1)
+Step_R2_Data1 <- vector(length = n_simul1)
 
 for(i in 1:n_simul1){
-  sig1 <- stepwise(X_n_simul1[[i]],matrix(y_n_simul1[[i]]),"BIC",slentry=0.15,slstay=0.15)
-  stepwise_fit1 <- lm(y_n_simul1[[i]] ~ X_n_simul1[[i]][,sig1]+0)
-  b1 = array(0,8)
-  b1[sig1] = coef(stepwise_fit1)
-   stepwise_MSE_Data1[[i]] <-   t(beta1-b1)%*%CovarMat1%*%(beta1-b1)
+  sig1 <- lm(Y~.,data=data1[[i]])
+  Step_fit1 <- ols_step_both_p(sig1, pent = 0.15, prem = 0.15)
+  Step_AIC_Data1[i] <- min(Step_fit1$aic)
+  Step_BIC_Data1[i] <- min(Step_fit1$sbc)
+  Step_R2_Data1[i] <-  max(Step_fit1$adjr)
 }
 
-mean_stepwise_MSE_Data1 <- mean(unlist(stepwise_MSE_Data1))
-median_stepwise_MSE_Data1 <- median(unlist(stepwise_MSE_Data1))
-stepwise_row1<- cbind("Stepwise Selection",mean_stepwise_MSE_Data1,
-                     median_stepwise_MSE_Data1)
+mean_Step_AIC_Data1 <- mean(Step_AIC_Data1)
+mean_Step_BIC_Data1 <- mean(Step_BIC_Data1)
+mean_Step_R2_Data1 <- mean(Step_R2_Data1)
+
+med_Step_AIC_Data1 <- median(Step_AIC_Data1)
+med_Step_BIC_Data1 <- median(Step_BIC_Data1)
+med_Step_R2_Data1 <- median(Step_R2_Data1)
+
+Step_row1 <- cbind("Stepwise Selection", mean_Step_AIC_Data1,
+                  mean_Step_BIC_Data1,
+                  mean_Step_R2_Data1,
+                  med_Step_AIC_Data1,
+                  med_Step_BIC_Data1,
+                  med_Step_R2_Data1)
 
 #Underlying Model 2
-stepwise_MSE_Data2 <- list()
+Step_AIC_Data2 <- vector(length = n_simul2)
+Step_BIC_Data2 <- vector(length = n_simul2)
+Step_R2_Data2 <- vector(length = n_simul2)
 
 for(i in 1:n_simul2){
-  sig2 <- stepwise(X_n_simul2[[i]],matrix(y_n_simul2[[i]]),"BIC",slentry=0.15,slstay=0.15)
-  stepwise_fit2 <- lm(y_n_simul2[[i]] ~ X_n_simul2[[i]][,sig2]+0)
-  b2 = array(0,8)
-  b2[sig2] = coef(stepwise_fit2)
-   stepwise_MSE_Data2[[i]] <-   t(beta2-b2)%*%CovarMat2%*%(beta2-b2)
+  sig2 <- lm(Y~.,data=data2[[i]])
+  Step_fit2 <- ols_step_both_p(sig2, pent = 0.15, prem = 0.15)
+  Step_AIC_Data2[i] <- min(Step_fit2$aic)
+  Step_BIC_Data2[i] <- min(Step_fit2$sbc)
+  Step_R2_Data2[i] <-  max(Step_fit2$adjr)
 }
 
-mean_stepwise_MSE_Data2 <- mean(unlist(stepwise_MSE_Data2))
-median_stepwise_MSE_Data2 <- median(unlist(stepwise_MSE_Data2))
-stepwise_row2<- cbind("Stepwise Selection",mean_stepwise_MSE_Data2,
-                     median_stepwise_MSE_Data2)
+mean_Step_AIC_Data2 <- mean(Step_AIC_Data2)
+mean_Step_BIC_Data2 <- mean(Step_BIC_Data2)
+mean_Step_R2_Data2 <- mean(Step_R2_Data2)
+
+med_Step_AIC_Data2 <- median(Step_AIC_Data2)
+med_Step_BIC_Data2 <- median(Step_BIC_Data2)
+med_Step_R2_Data2 <- median(Step_R2_Data2)
+
+Step_row2 <- cbind("Stepwise Selection", mean_Step_AIC_Data2,
+                  mean_Step_BIC_Data2,
+                  mean_Step_R2_Data2,
+                  med_Step_AIC_Data2,
+                  med_Step_BIC_Data2,
+                  med_Step_R2_Data2)
 
 #Underlying Model 3
-stepwise_MSE_Data3 <- list()
+Step_AIC_Data3 <- vector(length = n_simul3)
+Step_BIC_Data3 <- vector(length = n_simul3)
+Step_R2_Data3 <- vector(length = n_simul3)
 
 for(i in 1:n_simul3){
-  sig3 <- stepwise(X_n_simul3[[i]],matrix(y_n_simul3[[i]]),"BIC",slentry=0.15,slstay=0.15)
-  stepwise_fit3 <- lm(y_n_simul3[[i]] ~ X_n_simul3[[i]][,sig3]+0)
-  b3 = array(0,8)
-  b3[sig3] = coef(stepwise_fit3)
-   stepwise_MSE_Data3[[i]] <-   t(beta3-b3)%*%CovarMat3%*%(beta3-b3)
+  sig3 <- lm(Y~.,data=data3[[i]])
+  Step_fit3 <- ols_step_both_p(sig3, pent = 0.15, prem = 0.15)
+  Step_AIC_Data3[i] <- min(Step_fit3$aic)
+  Step_BIC_Data3[i] <- min(Step_fit3$sbc)
+  Step_R2_Data3[i] <-  max(Step_fit3$adjr)
 }
 
-mean_stepwise_MSE_Data3 <- mean(unlist(stepwise_MSE_Data3))
-median_stepwise_MSE_Data3 <- median(unlist(stepwise_MSE_Data3))
-stepwise_row3<- cbind("Stepwise Selection",mean_stepwise_MSE_Data3,
-                     median_stepwise_MSE_Data3)
+mean_Step_AIC_Data3 <- mean(Step_AIC_Data3)
+mean_Step_BIC_Data3 <- mean(Step_BIC_Data3)
+mean_Step_R2_Data3 <- mean(Step_R2_Data3)
+
+med_Step_AIC_Data3 <- median(Step_AIC_Data3)
+med_Step_BIC_Data3 <- median(Step_BIC_Data3)
+med_Step_R2_Data3 <- median(Step_R2_Data3)
+
+Step_row3 <- cbind("Stepwise Selection", mean_Step_AIC_Data3,
+                  mean_Step_BIC_Data3,
+                  mean_Step_R2_Data3,
+                  med_Step_AIC_Data3,
+                  med_Step_BIC_Data3,
+                  med_Step_R2_Data3)
 ```
 
 # Results and Discussion
 ## Performance Metrics
 
-
-- <span style="color:black; font-weight:bold"> General MSE Results on Underlying Models:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> General MSE Results on Underlying Models:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods. CHANGE THIS!!!!
 
 Results Table:
-```{r,echo=FALSE}
-Table_MSE1 <- data.frame(rbind(OLS_row1,LASSO_row1,Ridge_row1,All_possible_row1
-                        ,forward_row1,backward_row1,stepwise_row1))
-colnames(Table_MSE1) <- c("Method","Mean MSE","Median MSE")
+```{r}
+Table_Data1 <- data.frame(rbind(OLS_row1,LASSO_row1,Rid_row1,All_row1
+                        ,For_row1,Back_row1,Step_row1))
+colnames(Table_Data1) <- c("Method","Mean AIC","Mean BIC","Mean R-Squared","Median AIC","Median BIC","Median R-Squared")
 
-Table_MSE2 <- data.frame(rbind(OLS_row2,LASSO_row2,Ridge_row2,All_possible_row2
-                        ,forward_row2,backward_row2,stepwise_row2))
-colnames(Table_MSE2) <- c("Method","Mean MSE","Median MSE")
+Table_Data2 <- data.frame(rbind(OLS_row2,LASSO_row2,Rid_row2,All_row2
+                        ,For_row2,Back_row2,Step_row2))
+colnames(Table_Data2) <- c("Method","Mean AIC","Mean BIC","Mean R-Squared","Median AIC","Median BIC","Median R-Squared")
 
+Table_Data3 <- data.frame(rbind(OLS_row3,LASSO_row3,Rid_row3,All_row3
+                        ,For_row3,Back_row3,Step_row3))
+colnames(Table_Data3) <- c("Method","Mean AIC","Mean BIC","Mean R-Squared","Median AIC","Median BIC","Median R-Squared")
 
-Table_MSE3 <- data.frame(rbind(OLS_row3,LASSO_row3,Ridge_row3,All_possible_row3
-                        ,forward_row3,backward_row3,stepwise_row3))
-colnames(Table_MSE3) <- c("Method","Mean MSE","Median MSE")
+Table_Data1[, c(2:ncol(Table_Data1))] <- sapply(Table_Data1[, c(2:ncol(Table_Data1))], as.numeric)
+Table_Data1[, c(2:ncol(Table_Data1))] <- round(Table_Data1[, c(2:ncol(Table_Data1))],2)
 
+Table_Data2[, c(2:ncol(Table_Data2))] <- sapply(Table_Data2[, c(2:ncol(Table_Data2))], as.numeric)
+Table_Data2[, c(2:ncol(Table_Data2))] <- round(Table_Data2[, c(2:ncol(Table_Data2))],2)
 
-Table_MSE <- cbind(Table_MSE1, Table_MSE2[,-1], Table_MSE3[,-1])
+Table_Data3[, c(2:ncol(Table_Data3))] <- sapply(Table_Data3[, c(2:ncol(Table_Data3))], as.numeric)
+Table_Data3[, c(2:ncol(Table_Data3))] <- round(Table_Data3[, c(2:ncol(Table_Data3))],2)
 
-Table_MSE[, c(2:7)] <- sapply(Table_MSE[, c(2:7)], as.numeric)
+Table_Full <- cbind(Table_Data1, Table_Data2[,-1], Table_Data3[,-1])
+Table_Full[, c(2:ncol(Table_Full))] <- sapply(Table_Full[, c(2:ncol(Table_Full))], as.numeric)
+Table_Full[, c(2:ncol(Table_Full))] <- round(Table_Full[, c(2:ncol(Table_Full))],2)
 
-Table_MSE[, c(2:7)] <- round(Table_MSE[, c(2:7)],4)
-
-kable(Table_MSE) %>%
+kable(Table_Data1) %>%
   kable_styling("striped") %>%
-  add_header_above(c(" " = 1, "Underlying Model 1" = 2, "Underlying Model 2" = 2, "Underlying Model 3" = 2))
+  add_header_above(c(" " = 1, "Underlying Model 1" = 6))
+
+kable(Table_Data2) %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "Underlying Model 2" = 6))
+
+kable(Table_Data3) %>%
+  kable_styling("striped") %>%
+  add_header_above(c(" " = 1, "Underlying Model 3" = 6))
 ```
 
 
 
 ## Plots
 
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold">Plotting All AIC Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
 
-- <span style="color:black; font-weight:bold">Plotting General MSE:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.
-
-```{r,warning=FALSE,message=FALSE,echo=FALSE}
-MSE_df <- data.frame(
-            OLS = c(OLS_MSE_Data1,
-                    OLS_MSE_Data2,
-                    OLS_MSE_Data3),
-            LASSO = c(LASSO_MSE_Data1,
-                    LASSO_MSE_Data2,
-                    LASSO_MSE_Data3),
-            Ridge = c(Ridge_MSE_Data1,
-                    Ridge_MSE_Data2,
-                    Ridge_MSE_Data3),
-           `All Possible Regression` = c(unlist(All_possible_MSE_Data1),
-                    unlist(All_possible_MSE_Data2),
-                    unlist(All_possible_MSE_Data3)),
-           `Forward Selection` = c(unlist(forward_MSE_Data1),
-                    unlist(forward_MSE_Data2),
-                    unlist(forward_MSE_Data3)),
-           `Backward Elimination` = c(unlist(backward_MSE_Data1),
-                    unlist(backward_MSE_Data2),
-                    unlist(backward_MSE_Data3)),
-  `Stepwise Selection` = c(unlist(stepwise_MSE_Data1),
-                    unlist(stepwise_MSE_Data2),
-                    unlist(stepwise_MSE_Data3))
+```{r}
+AIC_df <- data.frame(
+   OLS = c(OLS_AIC_Data1, OLS_AIC_Data2, OLS_AIC_Data3),
+   LASSO = c(LASSO_AIC_Data1, LASSO_AIC_Data2, LASSO_AIC_Data3),
+   Ridge = c(Rid_AIC_Data1, Rid_AIC_Data2, Rid_AIC_Data3),
+   `All Possible Regression` = c(unlist(All_AIC_Data1), unlist(All_AIC_Data2), unlist(All_AIC_Data3)),
+   `Forward Selection` = c(unlist(For_AIC_Data1), unlist(For_AIC_Data2), unlist(For_AIC_Data3)),
+   `Backward Elimination` = c(unlist(Back_AIC_Data1), unlist(Back_AIC_Data2), unlist(Back_AIC_Data3)),
+   `Stepwise Selection` = c(unlist(Step_AIC_Data1), unlist(Step_AIC_Data2),unlist(Step_AIC_Data3))
 )
 
-gathered_data <- gather(MSE_df, key = "key", value = "value")
+gathered_data <- gather(AIC_df, key = "key", value = "value")
 
 colnames(gathered_data) <- c("key","value")
 
 gathered_data %>%
   ggplot( aes(reorder(key, value, FUN = median, .desc =TRUE), y=value, fill=key)) +
     geom_boxplot() +
-    ylim(0,15) +
     scale_fill_viridis(discrete = TRUE, alpha=0.5) +
     geom_jitter(color="black", size=0.4, alpha=0.8) +
     theme_ipsum() +
@@ -1411,28 +945,177 @@ gathered_data %>%
       legend.position="none",
       plot.title = element_text(size=11)) +
     coord_flip() +
-    labs(title = "MSE Distribution over all Models",
+    labs(title = "AIC Distribution Over All Models",
       x="Variable Selection Technique",
-      y="MSE")
+      y="AIC")
 ```
 
-- <span style="color:black; font-weight:bold"> Plotting Mean and Median MSE by Variable Selection Technique:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.
 
-```{r,warning=FALSE,message=FALSE,echo=FALSE}
-Table_MSE_New <- rbind(Table_MSE[,c(1,2,3)],Table_MSE[,c(1,4,5)],Table_MSE[,c(1,6,7)])
-gathered_MSE <- gather(Table_MSE_New , key = "key", value = "value",-Method)
-colnames(gathered_MSE) <- c("method","metric","value")
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold">Plotting All BIC Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
 
-ggplot(data = gathered_MSE, aes(x=method, y=value)) + 
+```{r}
+BIC_df <- data.frame(
+   OLS = c(OLS_BIC_Data1, OLS_BIC_Data2, OLS_BIC_Data3),
+   LASSO = c(LASSO_BIC_Data1, LASSO_BIC_Data2, LASSO_BIC_Data3),
+   Ridge = c(Rid_BIC_Data1, Rid_BIC_Data2, Rid_BIC_Data3),
+   `All Possible Regression` = c(unlist(All_BIC_Data1), unlist(All_BIC_Data2), unlist(All_BIC_Data3)),
+   `Forward Selection` = c(unlist(For_BIC_Data1), unlist(For_BIC_Data2), unlist(For_BIC_Data3)),
+   `Backward Elimination` = c(unlist(Back_BIC_Data1), unlist(Back_BIC_Data2), unlist(Back_BIC_Data3)),
+   `Stepwise Selection` = c(unlist(Step_BIC_Data1), unlist(Step_BIC_Data2),unlist(Step_BIC_Data3))
+)
+
+gathered_data <- gather(BIC_df, key = "key", value = "value")
+
+colnames(gathered_data) <- c("key","value")
+
+gathered_data %>%
+  ggplot( aes(reorder(key, value, FUN = median, .desc =TRUE), y=value, fill=key)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.5) +
+    geom_jitter(color="black", size=0.4, alpha=0.8) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)) +
+    coord_flip() +
+    labs(title = "BIC Distribution Over All Models",
+      x="Variable Selection Technique",
+      y="BIC")
+```
+
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold">Plotting All Adjusted $R^2$ Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+
+```{r}
+R2_df <- data.frame(
+   OLS = c(OLS_R2_Data1, OLS_R2_Data2, OLS_R2_Data3),
+   LASSO = c(LASSO_R2_Data1, LASSO_R2_Data2, LASSO_R2_Data3),
+   Ridge = c(Rid_R2_Data1, Rid_R2_Data2, Rid_R2_Data3),
+   `All Possible Regression` = c(unlist(All_R2_Data1), unlist(All_R2_Data2), unlist(All_R2_Data3)),
+   `Forward Selection` = c(unlist(For_R2_Data1), unlist(For_R2_Data2), unlist(For_R2_Data3)),
+   `Backward Elimination` = c(unlist(Back_R2_Data1), unlist(Back_R2_Data2), unlist(Back_R2_Data3)),
+   `Stepwise Selection` = c(unlist(Step_R2_Data1), unlist(Step_R2_Data2),unlist(Step_R2_Data3))
+)
+
+gathered_data <- gather(R2_df, key = "key", value = "value")
+
+colnames(gathered_data) <- c("key","value")
+
+gathered_data %>%
+  ggplot( aes(reorder(key, value, FUN = median, .desc =TRUE), y=value, fill=key)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.5) +
+    geom_jitter(color="black", size=0.4, alpha=0.8) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)) +
+    coord_flip() +
+    labs(title ="R-Squared Distribution Over All Models",
+      x="Variable Selection Technique",
+      y=expression(paste(R^2)))
+```
+
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Plotting Mean and Median MSE by Variable Selection Technique:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+
+```{r}
+Table_Full_New <- rbind(Table_Full[,c(1,2,3,5,6)],Table_Full[,c(1,8,9,11,12)],Table_Full[,c(1,14,15,17,18)])
+gathered_Full <- gather(Table_Full_New , key = "key", value = "value",-Method)
+colnames(gathered_Full) <- c("method","metric","value")
+
+ggplot(data = gathered_Full , aes(x=method, y=value)) + 
+  geom_boxplot(aes(fill=metric)) +
+  facet_wrap( ~ method, scales="free") +
+  theme_light()
+```
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Plotting Mean and Median MSE by Variable Selection Technique:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+
+```{r}
+Table_Full_New <- rbind(Table_Full[,c(1,4,7)],Table_Full[,c(1,10,13)],Table_Full[,c(1,16,19)])
+gathered_Full <- gather(Table_Full_New , key = "key", value = "value",-Method)
+colnames(gathered_Full) <- c("method","metric","value")
+
+ggplot(data = gathered_Full , aes(x=method, y=value)) + 
   geom_boxplot(aes(fill=metric)) +
   facet_wrap( ~ method, scales="free") +
   theme_light()
 ```
 
-- <span style="color:black; font-weight:bold"> Plotting Mean and Median MSE by Underlying Model:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.
+ CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold">Plotting All AIC Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
 
-```{r,warning=FALSE,message=FALSE}
+```{r}
+AIC_ByMod_df <- data.frame(
+   'Model-1' = c(OLS_AIC_Data1, LASSO_AIC_Data1, Rid_AIC_Data1,unlist(All_AIC_Data1),unlist(Back_AIC_Data1),unlist(Step_AIC_Data1)),
+   'Model-2' = c(OLS_AIC_Data2, LASSO_AIC_Data2, Rid_AIC_Data2,unlist(All_AIC_Data2),unlist(Back_AIC_Data2),unlist(Step_AIC_Data2)),
+   'Model-3' = c(OLS_AIC_Data3, LASSO_AIC_Data3, Rid_AIC_Data3,unlist(All_AIC_Data3),unlist(Back_AIC_Data3),unlist(Step_AIC_Data3))
+)
 
+BIC_ByMod_df <- data.frame(
+   'Model-1' = c(OLS_BIC_Data1, LASSO_BIC_Data1, Rid_BIC_Data1,unlist(All_BIC_Data1),unlist(Back_BIC_Data1),unlist(Step_BIC_Data1)),
+   'Model-2' = c(OLS_BIC_Data2, LASSO_BIC_Data2, Rid_BIC_Data2,unlist(All_BIC_Data2),unlist(Back_BIC_Data2),unlist(Step_BIC_Data2)),
+   'Model-3' = c(OLS_BIC_Data3, LASSO_BIC_Data3, Rid_BIC_Data3,unlist(All_BIC_Data3),unlist(Back_BIC_Data3),unlist(Step_BIC_Data3))
+)
+
+R2_ByMod_df <- data.frame(
+   'Model-1' = c(OLS_R2_Data1, LASSO_R2_Data1, Rid_R2_Data1,unlist(All_R2_Data1),unlist(Back_R2_Data1),unlist(Step_R2_Data1)),
+   'Model-2' = c(OLS_R2_Data2, LASSO_R2_Data2, Rid_R2_Data2,unlist(All_R2_Data2),unlist(Back_R2_Data2),unlist(Step_R2_Data2)),
+   'Model-3' = c(OLS_R2_Data3, LASSO_R2_Data3, Rid_R2_Data3,unlist(All_R2_Data3),unlist(Back_R2_Data3),unlist(Step_R2_Data3))
+)
+
+AIC_ByMod_gather <- gather(AIC_ByMod_df, key = "key", value = "value")
+colnames(AIC_ByMod_gather) <- c("key","value")
+
+BIC_ByMod_gather <- gather(BIC_ByMod_df, key = "key", value = "value")
+colnames(BIC_ByMod_gather) <- c("key","value")
+
+R2_ByMod_gather <- gather(R2_ByMod_df, key = "key", value = "value")
+colnames(R2_ByMod_gather) <- c("key","value")
+
+AIC_ByMod_gather %>%
+  ggplot( aes(reorder(key, value, FUN = median, .desc =TRUE), y=value, fill=key)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.5) +
+    geom_jitter(color="black", size=0.4, alpha=0.8) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)) +
+    coord_flip() +
+    labs(title = "AIC Distribution By Model",
+      x="Variable Selection Technique",
+      y="AIC")
+
+BIC_ByMod_gather %>%
+  ggplot( aes(reorder(key, value, FUN = median, .desc =TRUE), y=value, fill=key)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.5) +
+    geom_jitter(color="black", size=0.4, alpha=0.8) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)) +
+    coord_flip() +
+    labs(title = "BIC Distribution By Model",
+      x="Variable Selection Technique",
+      y="BIC")
+
+R2_ByMod_gather %>%
+  ggplot( aes(reorder(key, value, FUN = median, .desc =TRUE), y=value, fill=key)) +
+    geom_boxplot() +
+    scale_fill_viridis(discrete = TRUE, alpha=0.5) +
+    geom_jitter(color="black", size=0.4, alpha=0.8) +
+    theme_ipsum() +
+    theme(
+      legend.position="none",
+      plot.title = element_text(size=11)) +
+    coord_flip() +
+    labs(title = "R-Squared Distribution By Model",
+      x="Variable Selection Technique",
+      y=expression(paste(R^2)))
 ```
 
 
