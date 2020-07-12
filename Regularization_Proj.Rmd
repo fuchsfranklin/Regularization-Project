@@ -35,20 +35,22 @@ header-includes:
 ```{r, include=FALSE}
 knitr::opts_chunk$set(cache=TRUE, autodep=TRUE, cache.comments=TRUE,echo = TRUE,fig.align = 'center', comment = NA, message=FALSE,warning=FALSE,error=FALSE,results='hold')
 
-library(glmnet)
-library(knitr) 
+library(glmnet)     # LASSO and Ridge
+library(knitr)      # Nice Markdown Tables
 library(foreach)
 library(MASS)
 library(rlist)
 library(dvmisc)
-library(kableExtra)
-library(ggplot2)
+library(kableExtra) # Grid Plotting
+library(ggplot2)    # Plotting
 library(tidyverse)  # Data Manipulation and Visualization
-library(hrbrthemes)
+library(hrbrthemes) # Themes
 library(viridis)
-library(caret)      # ML framework
-library(leaps)      # Forward/Backward/Stepwise Regression
 library(olsrr)      # Another Package For Forward/Backward/Stepwise Regression
+library(extrafont)  # Fonts for Plotting (ggplot2 dependency)
+#font_import()      # Only required for first knit/execution on Windows
+
+loadfonts(device = "win")
 
 set.seed(122)
 ```
@@ -66,6 +68,13 @@ The aims of this project are to simulate multivariate data from underlying linea
 * Backward Elimination Regression
 * Stepwise Selection
 
+## Performance Metrics
+
+- <span style="color:black; font-weight:bold"> Akaike Information Criterion (AIC):</span>
+
+- <span style="color:black; font-weight:bold"> Bayesian Information Criterion (BIC):</span>
+
+- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$:</span>
 
 # Simulating Datasets
 
@@ -870,22 +879,21 @@ Step_row3 <- cbind("Stepwise Selection", mean_Step_AIC_Data3,
 # Results and Discussion
 ## Performance Metrics
 
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold"> General MSE Results on Underlying Models:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods. CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Table of Results for all methods for all models:</span> We observe that OLS performs the worst over all metrics as expected, since model 1 and model 3 contain multiple $\beta$ coefficients with value zero, and even for model 2 with exclusively non-zero coefficients OLS performed worse than all other models. Although all-possible regression, forward selection, backward selection, and stepwise selection performed better than OLS, did not perform much better when compared with Ridge and LASSO. Both Ridge and LASSO outperformed all methods for AIC, BIC, and Adjusted $R^2$ by a large margin. Furthermore, LASSO slightly outperformed Ridge, which makes sense due to the fact that LASSO can shrink model coefficients to zero to achieve a better approximation to the underlying models, where Ridge cannot completely eliminate coefficients for underlying models with zero-coefficients (such as model 1 and 3).
 
 Results Table:
 ```{r}
 Table_Data1 <- data.frame(rbind(OLS_row1,LASSO_row1,Rid_row1,All_row1
                         ,For_row1,Back_row1,Step_row1))
-colnames(Table_Data1) <- c("Method","Mean AIC","Mean BIC","Mean R-Squared","Median AIC","Median BIC","Median R-Squared")
+colnames(Table_Data1) <- c("Method","Mean AIC","Mean BIC","Mean Adj. R-Squared","Median AIC","Median BIC","Median Adj. R-Squared")
 
 Table_Data2 <- data.frame(rbind(OLS_row2,LASSO_row2,Rid_row2,All_row2
                         ,For_row2,Back_row2,Step_row2))
-colnames(Table_Data2) <- c("Method","Mean AIC","Mean BIC","Mean R-Squared","Median AIC","Median BIC","Median R-Squared")
+colnames(Table_Data2) <- c("Method","Mean AIC","Mean BIC","Mean Adj. R-Squared","Median AIC","Median BIC","Median Adj. R-Squared")
 
 Table_Data3 <- data.frame(rbind(OLS_row3,LASSO_row3,Rid_row3,All_row3
                         ,For_row3,Back_row3,Step_row3))
-colnames(Table_Data3) <- c("Method","Mean AIC","Mean BIC","Mean R-Squared","Median AIC","Median BIC","Median R-Squared")
+colnames(Table_Data3) <- c("Method","Mean AIC","Mean BIC","Mean Adj. R-Squared","Median AIC","Median BIC","Median Adj. R-Squared")
 
 Table_Data1[, c(2:ncol(Table_Data1))] <- sapply(Table_Data1[, c(2:ncol(Table_Data1))], as.numeric)
 Table_Data1[, c(2:ncol(Table_Data1))] <- round(Table_Data1[, c(2:ncol(Table_Data1))],2)
@@ -917,10 +925,9 @@ kable(Table_Data3) %>%
 
 ## Plots
 
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold">Plotting All AIC Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold">Plotting AIC Values Over All Models:</span> We confirm the results from the tables by directly plotting every AIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best.
 
-```{r}
+```{r, warning=FASLSE,message=FALSE}
 AIC_df <- data.frame(
    OLS = c(OLS_AIC_Data1, OLS_AIC_Data2, OLS_AIC_Data3),
    LASSO = c(LASSO_AIC_Data1, LASSO_AIC_Data2, LASSO_AIC_Data3),
@@ -951,8 +958,8 @@ gathered_data %>%
 ```
 
 
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold">Plotting All BIC Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Plotting BIC Values Over All Models:</span> We confirm the results (as nearly identical to AIC) from the tables by directly plotting every BIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best.
+
 
 ```{r}
 BIC_df <- data.frame(
@@ -984,8 +991,7 @@ gathered_data %>%
       y="BIC")
 ```
 
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold">Plotting All Adjusted $R^2$ Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Plotting Adjusted R-Squared Values Over All Models:</span> We confirm the results from the tables by directly plotting every R-Squared value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best. It is important to mention that although the performance differences seem less pronounced here than for AIC and BIC, the Adjusted R-Square can only take values between 0 and 1. 
 
 ```{r}
 R2_df <- data.frame(
@@ -1012,13 +1018,12 @@ gathered_data %>%
       legend.position="none",
       plot.title = element_text(size=11)) +
     coord_flip() +
-    labs(title ="R-Squared Distribution Over All Models",
+    labs(title ="Adjusted R-Squared Distribution Over All Models",
       x="Variable Selection Technique",
-      y=expression(paste(R^2)))
+      y=expression(paste('Adjusted',R^2)))
 ```
 
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold"> Plotting Mean and Median MSE by Variable Selection Technique:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Plotting AIC and BIC Values for Every Method:</span> We again confirm the same results as from earlier plots. Additionally, note that for OLS and the Stepwise methods, BIC seems to be slightly higher and for LASSO and Ridge AIC seems to be slightly higher.
 
 ```{r}
 Table_Full_New <- rbind(Table_Full[,c(1,2,3,5,6)],Table_Full[,c(1,8,9,11,12)],Table_Full[,c(1,14,15,17,18)])
@@ -1030,8 +1035,8 @@ ggplot(data = gathered_Full , aes(x=method, y=value)) +
   facet_wrap( ~ method, scales="free") +
   theme_light()
 ```
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold"> Plotting Mean and Median MSE by Variable Selection Technique:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+
+- <span style="color:black; font-weight:bold"> Plotting AIC and BIC Values for Every Method:</span> We again confirm the same results as from earlier plots. Interestingly, the median Adjusted $R^2$ is slightly higher than the mean Adjusted $R^2$.
 
 ```{r}
 Table_Full_New <- rbind(Table_Full[,c(1,4,7)],Table_Full[,c(1,10,13)],Table_Full[,c(1,16,19)])
@@ -1044,8 +1049,7 @@ ggplot(data = gathered_Full , aes(x=method, y=value)) +
   theme_light()
 ```
 
- CHANGE THIS!!!!
-- <span style="color:black; font-weight:bold">Plotting All AIC Values:</span> As expected OLS performs worst, although it is important to note that LASSO and Ridge have similar mean and median MSE scores, which does seem odd, since the median MSE is more robust to outlying values. We observe that the computational methods perform well concerning mean and median MSE relative to other methods.  CHANGE THIS!!!!
+- <span style="color:black; font-weight:bold"> Plotting Performances by Model:</span> Although we aim to compare variable selection methods, it can be interesting to consider performance metrics by model. We observe that overall AIC, BIC, and Adjusted $R^2$ are better for model 1 and model 3 than for model 2. These results make sense intuitively, since we are comparing model selection methods and a linear model (model 2) that has exclusively non-zero coefficients will lead to poorer performances than linear models inclyding non-zero coefficients (model 1 and 3).  
 
 ```{r}
 AIC_ByMod_df <- data.frame(
@@ -1118,6 +1122,9 @@ R2_ByMod_gather %>%
       y=expression(paste(R^2)))
 ```
 
+## Discussion and Conclusion
+
+The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (CITE ESLR). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined by Bertsimas, King, Mazumder (CITE: Best Subset Selection via a Modern Optimization Lens).
 
 # References
 
@@ -1127,18 +1134,21 @@ R2_ByMod_gather %>%
 * Hocking, R. (1976). A Biometrics Invited Paper. The Analysis and Selection of Variables in Linear Regression. Biometrics, 32(1), 1-49. doi:<!-- -->10.230<!-- -->7/2529336
 
 ## Books
+* ESLR !!!!!!!!!!!!!!!!!!
+
 * James, G.; Witten, D.; Hastie, T. & Tibshirani, R. (2013), An Introduction to Statistical Learning: with Applications in R. Springer. doi:<!-- -->10.1007/978-1-4<!-- -->614-7138-7
 
 ## R Packages
-* glmnet
-* knitr
-* foreach
-* MASS
-* rlist
-* rmarkdown
-* dvmisc
-* kableExtra
-* ggplot2
-* tidyr
-* hrbrthemes
-* viridis
+*glmnet   
+*knitr      
+*foreach
+*MASS
+*rlist
+*dvmisc
+*kableExtra 
+*ggplot2    
+*tidyverse  
+*hrbrthemes 
+*viridis
+*olsrr     
+*extrafont 
