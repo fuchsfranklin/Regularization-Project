@@ -1,9 +1,6 @@
 ---
 title: "Comparing Regularization Techniques on Simulated Data"
 subtitle: 'A Variable Selection Project'
-author:
-- name: Franklin Fuchs
-  affiliation: University of Nevada, Reno
 output:
   html_document:
         code_folding: hide
@@ -53,7 +50,9 @@ loadfonts(device = "win")
 
 set.seed(122)
 ```
+[__Franklin Fuchs__](https://franklinfuchs.shinyapps.io/franklinfuchs/) \br
 
+__University of Nevada, Reno__
 
 # Introduction
 
