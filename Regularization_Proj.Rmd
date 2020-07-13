@@ -49,7 +49,6 @@ library(viridis)
 library(olsrr)      # Another Package For Forward/Backward/Stepwise Regression
 library(extrafont)  # Fonts for Plotting (ggplot2 dependency)
 #font_import()      # Only required for first knit/execution on Windows
-
 loadfonts(device = "win")
 
 set.seed(122)
@@ -58,7 +57,7 @@ set.seed(122)
 
 # Introduction
 
-The aims of this project are to simulate multivariate data from underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for every underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods. Finally, we use mean and median Mean Square Error to compare performances. The following models will be compared. The immediate next step for this project is to add performance metrics such as AIC and BIC in addition to the mean and median MSE to better capture model performances. I also want to vectorize all loops and generally reduce redundant variable storage where possible.
+The aims of this project are to simulate multivariate data from three underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for every underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods and consider Akaike Information Criterion (AIC), Bayesian Information Criterion (BIC), and Adjusted $R^2$ as performance metrics. My next goal is to vectorize all for loops and generally reduce redundant variable storage where possible. 
 
 * Ordinary Least Squares Regression (No Variable Selection)
 * LASSO Regression
@@ -70,11 +69,25 @@ The aims of this project are to simulate multivariate data from underlying linea
 
 ## Performance Metrics
 
-- <span style="color:black; font-weight:bold"> Akaike Information Criterion (AIC):</span>
+We use the following performance metrics to measure variable selection method performances.
 
-- <span style="color:black; font-weight:bold"> Bayesian Information Criterion (BIC):</span>
+- <span style="color:black; font-weight:bold"> Akaike Information Criterion (AIC):</span> Ways to compute the AIC can be found in "A primer on model selection using the Akaike Information Criterion" by Portet (2020). Let $k$ be the number of parameters, $\mathscr{L}$ be the likelihood function, $\hat{\theta}_{MLE}$ be the maximum likelihood estimate of $\theta$, and so the AIC is denoted as follows.
 
-- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$:</span>
+$$
+AIC = -2\text{log}(\mathscr{L}(\hat{\theta}_{MLE}|y)) + 2k
+$$
+
+- <span style="color:black; font-weight:bold"> Bayesian Information Criterion (BIC):</span> Ways to compute the BIC can be found in "Sensitivity and specificity of information criteria" by Dziakh et al. (2011). Let $k$ be the number of parameters, $\mathscr{L}$ be the likelihood function, $\hat{\theta}_{MLE}$ be the maximum likelihood estimate of $\theta$, $n$ be sample size, and so the BIC is denoted as follows.
+
+$$
+BIC = -2\text{log}(\mathscr{L}(\hat{\theta}_{MLE}|y)) + k\;log(n)
+$$
+
+- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$ Value:</span> The Adjusted $R^2$ Value is a modified version of the $R^2$ that better accounts for model complexity and number of predictors. Let $n$ be sample size, $k$ be number of parameters, $\bar{y}$ be the average of the response variable, then the adjusted $R^2$ Value is denoted as follows (CITE: primer paper). 
+
+$$
+R_{adj}^{2}=1-\frac{RSS/(n-k-1)}{\sum_{i=1}^{n}(y_i-\bar{y})^2/(n-1)}
+$$
 
 # Simulating Datasets
 
@@ -877,11 +890,12 @@ Step_row3 <- cbind("Stepwise Selection", mean_Step_AIC_Data3,
 ```
 
 # Results and Discussion
+
 ## Performance Metrics
 
 - <span style="color:black; font-weight:bold"> Table of Results for all methods for all models:</span> We observe that OLS performs the worst over all metrics as expected, since model 1 and model 3 contain multiple $\beta$ coefficients with value zero, and even for model 2 with exclusively non-zero coefficients OLS performed worse than all other models. Although all-possible regression, forward selection, backward selection, and stepwise selection performed better than OLS, did not perform much better when compared with Ridge and LASSO. Both Ridge and LASSO outperformed all methods for AIC, BIC, and Adjusted $R^2$ by a large margin. Furthermore, LASSO slightly outperformed Ridge, which makes sense due to the fact that LASSO can shrink model coefficients to zero to achieve a better approximation to the underlying models, where Ridge cannot completely eliminate coefficients for underlying models with zero-coefficients (such as model 1 and 3).
 
-Results Table:
+Results Tables:
 ```{r}
 Table_Data1 <- data.frame(rbind(OLS_row1,LASSO_row1,Rid_row1,All_row1
                         ,For_row1,Back_row1,Step_row1))
@@ -927,7 +941,7 @@ kable(Table_Data3) %>%
 
 - <span style="color:black; font-weight:bold">Plotting AIC Values Over All Models:</span> We confirm the results from the tables by directly plotting every AIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best.
 
-```{r, warning=FASLSE,message=FALSE}
+```{r, warning=FALSE,message=FALSE}
 AIC_df <- data.frame(
    OLS = c(OLS_AIC_Data1, OLS_AIC_Data2, OLS_AIC_Data3),
    LASSO = c(LASSO_AIC_Data1, LASSO_AIC_Data2, LASSO_AIC_Data3),
@@ -1124,31 +1138,40 @@ R2_ByMod_gather %>%
 
 ## Discussion and Conclusion
 
-The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (CITE ESLR). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined by Bertsimas, King, Mazumder (CITE: Best Subset Selection via a Modern Optimization Lens).
+The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined in a preliminary paper by Bertsimas, King, Mazumder (2015).
 
 # References
 
-## Papers
-* Tibshirani, R. (1996). Regression Shrinkage and Selection Via the Lasso. Journal of the Royal Statistical Society: Series B (Methodological), 58: 267-288. doi:<!-- -->10.1111/j.251<!-- -->7-6161.1996.tb02080.x
+## Aknowledgement
+I would like to thank Professor Mihye Ahn for the recommendation of doing such a personal project to supplement her regression and linear models course.
 
-* Hocking, R. (1976). A Biometrics Invited Paper. The Analysis and Selection of Variables in Linear Regression. Biometrics, 32(1), 1-49. doi:<!-- -->10.230<!-- -->7/2529336
+## Papers
+* Tibshirani, R. (1996). Regression Shrinkage and Selection via the Lasso. _Journal of the Royal Statistical Society (Series B)_, 58, 267-288.
+
+* Hocking, R. (1976). A Biometrics Invited Paper. The Analysis and Selection of Variables in Linear Regression. _Biometrics_, 32, 1-49.
+
+* Portet S. (2020). A primer on model selection using the Akaike Information Criterion. Infectious Disease Modelling, 5, 111–128.
+
+* Dziak, J. J., Coffman, D. L., Lanza, S. T., Li, R., & Jermiin, L. S. (2020). Sensitivity and specificity of information criteria. Briefings in bioinformatics, 21(2), 553–565.
+
+* Bertsimas, D., King, A., & Mazumder, R. (2015). Best Subset Selection via a Modern Optimization Lens. _arXiv: Methodology._
 
 ## Books
-* ESLR !!!!!!!!!!!!!!!!!!
+* Hastie, T., Tibshirani, R., & Friedman, J. H. (2009). _The elements of statistical learning: data mining, inference, and prediction._ New York: Springer.
 
-* James, G.; Witten, D.; Hastie, T. & Tibshirani, R. (2013), An Introduction to Statistical Learning: with Applications in R. Springer. doi:<!-- -->10.1007/978-1-4<!-- -->614-7138-7
+* James, G., Witten, D., Hastie, T. & Tibshirani, R. (2013). _An Introduction to Statistical Learning: with Applications in R._ New York: Springer.
 
 ## R Packages
-*glmnet   
-*knitr      
-*foreach
-*MASS
-*rlist
-*dvmisc
-*kableExtra 
-*ggplot2    
-*tidyverse  
-*hrbrthemes 
-*viridis
-*olsrr     
-*extrafont 
+* glmnet   
+* knitr      
+* foreach
+* MASS
+* rlist
+* dvmisc
+* kableExtra 
+* ggplot2    
+* tidyverse  
+* hrbrthemes 
+* viridis
+* olsrr     
+* extrafont 
