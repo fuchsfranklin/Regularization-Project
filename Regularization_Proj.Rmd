@@ -82,7 +82,7 @@ $$
 BIC = -2\text{log}(\mathscr{L}(\hat{\theta}_{MLE}|y)) + k\;log(n)
 $$
 
-- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$ Value:</span> The Adjusted $R^2$ Value is a modified version of the $R^2$ that better accounts for model complexity and number of predictors. Let $n$ be sample size, $k$ be number of parameters, $\bar{y}$ be the average of the response variable, then the adjusted $R^2$ Value is denoted as follows (CITE: primer paper). 
+- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$ Value:</span> The Adjusted $R^2$ Value is a modified version of the $R^2$ that better accounts for model complexity and number of predictors. Let $n$ be sample size, $k$ be number of parameters, $\bar{y}$ be the average of the response variable, then the adjusted $R^2$ Value is denoted as follows. 
 
 $$
 R_{adj}^{2}=1-\frac{RSS/(n-k-1)}{\sum_{i=1}^{n}(y_i-\bar{y})^2/(n-1)}
@@ -1137,7 +1137,7 @@ R2_ByMod_gather %>%
 
 ## Discussion and Conclusion
 
-The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined in a preliminary paper by Bertsimas, King, Mazumder (2015).
+The observation that LASSO and Ridge outperform the Stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined in a preliminary paper by Bertsimas, King, Mazumder (2015).
 
 # References
 
