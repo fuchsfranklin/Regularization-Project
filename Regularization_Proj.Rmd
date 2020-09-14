@@ -56,7 +56,7 @@ __University of Nevada, Reno (UNR)__
 
 # Introduction
 
-The aims of this personal project are to simulate multivariate data from three underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for every underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods and consider Akaike Information Criterion (AIC), Bayesian Information Criterion (BIC), and Adjusted $R^2$ as performance metrics. My next goal is to vectorize all for loops and generally reduce redundant variable storage where possible. The following methods are considered.
+The aims of this personal project are to simulate multivariate data from three underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for the first three underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods and consider Akaike Information Criterion (AIC), Bayesian Information Criterion (BIC), and Adjusted $R^2$ as performance metrics. My next goal is to vectorize all for loops and generally reduce redundant variable storage where possible. The following methods are considered.
 
 * Ordinary Least Squares Regression (No Variable Selection)
 * LASSO Regression
@@ -90,7 +90,7 @@ $$
 
 # Simulating Datasets
 
-In this section we simulate data from the four aforementioned underlying models.
+In this section we simulate data from the three aforementioned underlying models.
 
 ## Underlying Model 1
 
@@ -1137,7 +1137,7 @@ R2_ByMod_gather %>%
 
 ## Discussion and Conclusion
 
-The observation that LASSO and Ridge outperform the Stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined in a preliminary paper by Bertsimas, King, Mazumder (2015).
+The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined in a paper by Bertsimas, King, Mazumder (2015).
 
 # References
 
