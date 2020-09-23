@@ -50,7 +50,7 @@ loadfonts(device = "win")
 
 set.seed(122)
 ```
-[__Franklin Fuchs__](https://franklinfuchs.shinyapps.io/franklinfuchs/) \br
+[<ins>__Franklin Fuchs__</ins>](https://franklinfuchs.shinyapps.io/franklinfuchs/) \br
 
 __University of Nevada, Reno (UNR)__
 
