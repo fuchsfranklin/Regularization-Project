@@ -1,6 +1,5 @@
 ---
-title: "Comparing Regularization Techniques on Simulated Data"
-subtitle: 'A Variable Selection Project'
+title: "Comparing Variable Selection Techniques on Simulated Data"
 output:
   html_document:
         code_folding: hide
@@ -56,9 +55,9 @@ __University of Nevada, Reno (UNR)__
 
 # Introduction
 
-The aims of this personal project are to simulate multivariate data from three underlying linear models with varying degrees of correlation among predictors and then observing how effective different variable selection methods perform on each dataset by fitting a linear regression model with the selected variables. Thus, we first simulate 50 datasets for the first three underlying model from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit the models according several variable selection and shrinkage methods and consider Akaike Information Criterion (AIC), Bayesian Information Criterion (BIC), and Adjusted $R^2$ as performance metrics. My next goal is to vectorize all for loops and generally reduce redundant variable storage where possible. The following methods are considered.
+The aims of this project are to simulate multivariate data from three underlying models with varying degrees of correlation among predictors and observing how effective different variable selection methods perform on each dataset for linear regression. Thus, we first simulate 50 datasets for each of the first three underlying models from section 7 of the Paper "Regression Shrinkage and Selection via the Lasso" by Tibshirani (1996). We then fit linear regression models for several variable selection and shrinkage methods and evaluate performances with Akaike Information Criterion (AIC), Bayesian Information Criterion (BIC), and Adjusted $R^2$ as performance metrics. My next goal is to vectorize all for loops and generally reduce redundant variable storage where possible. The following methods are considered.
 
-* Ordinary Least Squares Regression (No Variable Selection)
+* Ordinary Least Squares Regression
 * LASSO Regression
 * Ridge Regression
 * All possible Regression
@@ -82,7 +81,7 @@ $$
 BIC = -2\text{log}(\mathscr{L}(\hat{\theta}_{MLE}|y)) + k\;log(n)
 $$
 
-- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$ Value:</span> The Adjusted $R^2$ Value is a modified version of the $R^2$ that better accounts for model complexity and number of predictors. Let $n$ be sample size, $k$ be number of parameters, $\bar{y}$ be the average of the response variable, then the adjusted $R^2$ Value is denoted as follows. 
+- <span style="color:black; font-weight:bold"> Adjusted $\boldsymbol{R^2}$ Value:</span> The Adjusted $R^2$ Value is a modified version of the $R^2$ that better accounts for number of predictors. Let $n$ be sample size, $k$ be number of parameters, $\bar{y}$ be the average of the response variable, then the adjusted $R^2$ Value is denoted as follows. 
 
 $$
 R_{adj}^{2}=1-\frac{RSS/(n-k-1)}{\sum_{i=1}^{n}(y_i-\bar{y})^2/(n-1)}
@@ -135,7 +134,7 @@ for(i in 1:n_simul1){
 
 ## Underlying Model 2
 
-Data from the second underlying model also consists of 50 simulated datasets with 20 observations each with the same model structure as for model 1, but now with parameter values $\beta_{j}=0.85$ for every $j$, and $\sigma=3$, and the correlation between $x_i$ and $x_j$ as $\rho^{|i-j|}$ where $\rho=0.5$.
+Data from the second underlying model also consists of 50 simulated datasets with 20 observations each with the same model structure as for model 1, but now with parameter values $\beta_{j}=0.85$ for every $j$, $\sigma=3$, and the correlation between $x_i$ and $x_j$ as $\rho^{|i-j|}$ where $\rho=0.5$.
 
 R-Implementation:
 ```{r}
@@ -172,7 +171,7 @@ for(i in 1:n_simul2){
 
 ## Underlying Model 3
 
-Data from the third underlying model also consists of 50 simulated datasets with 20 observations each with the same model structure as for model 1, but now with parameter values $\boldsymbol{\beta}=(5,0,0,0,0,0,0,0)^T$, and $\sigma=2$, and the correlation between $x_i$ and $x_j$ as $\rho^{|i-j|}$ where $\rho=0.5$.
+Data from the third underlying model also consists of 50 simulated datasets with 20 observations each with the same model structure as for model 1, but now with parameter values $\boldsymbol{\beta}=(5,0,0,0,0,0,0,0)^T$, $\sigma=2$, and the correlation between $x_i$ and $x_j$ as $\rho^{|i-j|}$ where $\rho=0.5$.
 
 R-Implementation:
 ```{r}
@@ -210,11 +209,11 @@ for(i in 1:n_simul3){
 
 # Fitting Models
 
-In this section, we fit the regression models and measure performance for each underlying model. For LASSO and Ridge we use the glmnet R package, and all-possible, forward, backward, and stepwise selection we use the olsrr package.
+In this section, we fit the regression models and measure model performances on each underlying model. For LASSO and Ridge we use the glmnet R package, and for all-possible, forward, backward, and stepwise selection we use the olsrr package.
 
 ## OLS Regression
 
-We first fit the OLS Regression Model and measure model performances. It is important to mention that no predictors are discarded for OLS Regression. We have the data as $(\boldsymbol{x}^{i},y_i)$ for $i=1,2,...,N$, where $\boldsymbol{x}^{i}=(x_{i1},...,x_{ip})^T$, and according to Garet et al. (2013) we thus estimate $\beta_{0},\beta_{1},...,\beta_{p}$ to minimize
+We first fit the OLS Regression model and measure model performances. It is important to mention that no predictors are discarded for OLS Regression. We have the data as $(\boldsymbol{x}^{i},y_i)$ for $i=1,2,...,N$, where $\boldsymbol{x}^{i}=(x_{i1},...,x_{ip})^T$, and according to Garet et al. (2013) we thus estimate $\beta_{0},\beta_{1},...,\beta_{p}$ to minimize
 
 $$
 \text{RSS} =  \sum^{n}_{i=1}\left(y_{i}-\beta_{0}-\sum^{p}_{j=1}\beta_{j}x_{ij}\right)^2
@@ -307,7 +306,7 @@ OLS_row3 <- cbind("OLS", mean_OLS_AIC_Data3,
 
 ## LASSO Regression
 
-We now fit the LASSO with 10-fold cross-validation, measure model performances, and outline the LASSO technique according to Tibshirani (1996). We have the data as $(\boldsymbol{x}^{i},y_i)$ for $i=1,2,...,N$, where $\boldsymbol{x}^{i}=(x_{i1},...,x_{ip})^T$ and the predictors are standardized. Additionally, we define $\boldsymbol{\hat{\beta}}=(\hat{\beta}_{1},...,\hat{\beta}_{p})^T$ and tuning parameter $t\geq0$ and so the LASSO estimate $(\boldsymbol{\hat{\alpha}},\boldsymbol{\hat{\beta}})$ is defined as
+We now outline the LASSO technique according to Tibshirani (1996), fit the LASSO Regression model, and measure model performances. We have the data as $(\boldsymbol{x}^{i},y_i)$ for $i=1,2,...,N$, where $\boldsymbol{x}^{i}=(x_{i1},...,x_{ip})^T$ and the predictors are standardized. Additionally, we define $\boldsymbol{\hat{\beta}}=(\hat{\beta}_{1},...,\hat{\beta}_{p})^T$ and tuning parameter $t\geq0$ and so the LASSO estimate $(\boldsymbol{\hat{\alpha}},\boldsymbol{\hat{\beta}})$ is defined as
 
 $$
 (\boldsymbol{\hat{\alpha}},\boldsymbol{\hat{\beta}})=\text{arg min}\left\{\sum^{N}_{i=1}(y_i-\alpha-\sum_{j}\beta_{j}x_{ij})^2\right\} \text{   subject to } \sum_{j}|\beta_j|\leq t
@@ -414,7 +413,7 @@ LASSO_row3 <- cbind("LASSO", mean_LASSO_AIC_Data3,
 
 ## Ridge Regression
 
-We now fit the Ridge with 10-fold cross-validation, measure model performances, and outline the Ridge Regression technique according to Gareth James et al. (2013). Ridge Regression has a similar setup to OLS, although the quantity to be minimized is different than for OLS and LASSO Regression. We define tuning parameter $\lambda \geq 0$, and so we have regression coefficient estimates $\boldsymbol{\hat{\beta}}$ to minimize 
+We now outline the Ridge Regression technique according to Gareth James et al. (2013), fit the Ridge Regression model, and measure model performances. Ridge Regression has a similar setup to OLS, although the quantity to be minimized is different than for OLS and LASSO Regression. We define tuning parameter $\lambda \geq 0$, and so we have regression coefficient estimates $\boldsymbol{\hat{\beta}}$ to minimize 
 
 $$
 \sum_{i=1}^{n}\left(y_{i}-\beta_{0}-\sum_{j=1}^{p}\beta_{j}x_{ij}\right)^2 + \lambda\sum^{p}_{j=1}\beta^{2}_{j}
@@ -520,7 +519,7 @@ Rid_row3 <- cbind("Ridge", mean_Rid_AIC_Data3,
 
 ## All Possible Regression
 
-We now fit All Possible Regression Models, measure model performances, and outline the All Possible Regression technique according to Hocking (1976). All Possible Regression is a computationally intensive variable selection technique where given that the number of predictors $t$ is not too large since the number of all possible models is $2^t$, then all possible models will be fit and the model with the best performance will be selected. It is important to mention that Hocking (1976) emphasizes approaches and modifications to All Possible Regression that optimize the procedure for evaluating all possible subsets, which we will not further consider for this project.
+We now outline the All Possible Regression technique according to Hocking (1976), fit All Possible Regression Models, measure model performances, and. All Possible Regression is a computationally intensive variable selection technique where the given number of predictors $t$ cannot be too large, as the number of all possible models is $2^t$. All $2^t$ possible models will be fit and the model with the best performance will be selected. It is important to mention that Hocking (1976) emphasizes approaches and modifications to All Possible Regression that optimize the procedure for evaluating all possible subsets, which we will not further consider for this project.
 
 R-Implementation:
 ```{r}
@@ -611,7 +610,7 @@ All_row3 <- cbind("All-Possible Regression", mean_All_AIC_Data3,
 
 ## Forward Selection
 
-We now fit Forward Selection Regression Models with a cutoff p-value of $0.5$ for the $F$-statistic outlined below, measure model performances, and outline the Forward Selection technnique. According to Hocking (1976) the Forward Selection technique starts with no variables and adds one variable at a time to the equation until either all variables are in or a criteria to stop the technique is satisfied. Furthermore, the variable considered for inclusion at any step is the one yielding the largest F-ratio among the variables being considered for inclusion. Thus, the variable $i$ is added to the equation of $p$-terms if
+We now outline the Forward Selection technique, fit Forward Selection Regression Models with a cutoff p-value of $0.5$ for the $F$-statistic outlined below, and measure model performances. According to Hocking (1976) the Forward Selection technique starts with no variables and adds one variable at a time to the equation until either all variables are in or a criteria to stop the technique is satisfied. Furthermore, the variable considered for inclusion at any step is the one yielding the largest F-ratio among the variables being considered for inclusion. Thus, the variable $i$ is added to the equation of $p$-terms if
 
 $$
 F_{i} = \underset{i}{\max}\left(\frac{RSS_{p} - RSS_{p+i}}{\hat{\sigma}_{p+i}^2}\right) > F_{in}
@@ -705,7 +704,7 @@ For_row3 <- cbind("Forward Selection", mean_For_AIC_Data3,
 
 ## Backward Elimination
 
-We now fit Backward Elimination Regression Models with a cutoff p-value of $0.1$ for the $F$-statistic outlined below, measure model performances, and outline the Forward Selection technique. According to Hocking (1976) the Backward Elimination technique starts with all variables and eliminates one variable at a time from the equation until either all variables are out or a criteria to stop the technique is satisfied. Furthermore, the variable considered for exclusion at any step is the one yielding the smallest F-ratio among the variables being considered for exclusion if the F-ratio does not exceed a specified value. Thus, the variable $i$ is removed removed from the equation of $p$-terms if
+We now outline the Backward Selection technique, fit Backward Elimination models with a cutoff p-value of $0.1$ for the $F$-statistic outlined below, and measure model performances. According to Hocking (1976) the Backward Elimination technique starts with all variables and eliminates one variable at a time from the equation until either all variables are out or a criteria to stop the technique is satisfied. Furthermore, the variable considered for exclusion at any step is the one yielding the smallest F-ratio among the variables being considered for exclusion (if the F-ratio does not exceed a specified value). Thus, the variable $i$ is removed removed from the equation of $p$-terms if
 
 $$
 F_{i} = \underset{i}{\min}\left(\frac{RSS_{p-i} - RSS_{p}}{\hat{\sigma}_{p}^2}\right) < F_{out}
@@ -799,7 +798,7 @@ Back_row3 <- cbind("Backward Selection", mean_Back_AIC_Data3,
 
 ## Stepwise Selection
 
-We now fit Stepwise Selection Regression Models with an entry cutoff p-value of $0.15$ and a removal cutoff p-value of $0.15$ , measure model performances, and outline the Forward Selection technnique. According to Hocking (1976) the Stepwise Selection technique is a combination of both Forward Selection and Backward Elimination such that variables are added as in Forward Selection, but then after adding a variable, all variables in the equation can be removed as in Backward Eliminination.
+We now outline the Stepwise Selection technnique, fit Stepwise Selection Regression models with an entry cutoff p-value of $0.15$ and a removal cutoff p-value of $0.15$, and measure model performances. According to Hocking (1976) the Stepwise Selection technique is a combination of both Forward Selection and Backward Elimination such that variables are added as in Forward Selection, but then after adding a variable, all variables in the equation can be removed as in Backward Elimination.
 
 R-Implementation:
 ```{r}
@@ -892,7 +891,7 @@ Step_row3 <- cbind("Stepwise Selection", mean_Step_AIC_Data3,
 
 ## Performance Metrics
 
-- <span style="color:black; font-weight:bold"> Table of Results for all methods for all models:</span> We observe that OLS performs the worst over all metrics as expected, since model 1 and model 3 contain multiple $\beta$ coefficients with value zero, and even for model 2 with exclusively non-zero coefficients OLS performed worse than all other models. Although all-possible regression, forward selection, backward selection, and stepwise selection performed better than OLS, did not perform much better when compared with Ridge and LASSO. Both Ridge and LASSO outperformed all methods for AIC, BIC, and Adjusted $R^2$ by a large margin. Furthermore, LASSO slightly outperformed Ridge, which makes sense due to the fact that LASSO can shrink model coefficients to zero to achieve a better approximation to the underlying models, where Ridge cannot completely eliminate coefficients for underlying models with zero-coefficients (such as model 1 and 3).
+- <span style="color:black; font-weight:bold"> Table of Results for all methods for all models:</span> We observe that OLS performs the worst over all metrics as expected, since model 1 and model 3 contain multiple $\beta$ coefficients with value zero, and even for model 2 with exclusively non-zero coefficients, OLS performed worse than all other models. Although all-possible regression, forward selection, backward selection, and stepwise selection performed better than OLS, they did not perform as the Ridge and LASSO models. Both Ridge and LASSO outperformed all methods for AIC, BIC, and Adjusted $R^2$ by a large margin. Furthermore, LASSO slightly outperformed Ridge, which makes sense due to the fact that LASSO can shrink model coefficients to zero to achieve a better approximation to the underlying models, where Ridge cannot completely eliminate coefficients for underlying models with zero-coefficients (such as for model 1 and 3).
 
 Results Tables:
 ```{r}
@@ -938,7 +937,7 @@ kable(Table_Data3) %>%
 
 ## Plots
 
-- <span style="color:black; font-weight:bold">Plotting AIC Values Over All Models:</span> We confirm the results from the tables by directly plotting every AIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best.
+- <span style="color:black; font-weight:bold">Plotting AIC Values Over All Models:</span> We confirm the results from the tables of the previous subsection by directly plotting every AIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge models perform the best.
 
 ```{r, warning=FALSE,message=FALSE}
 AIC_df <- data.frame(
@@ -971,7 +970,7 @@ gathered_data %>%
 ```
 
 
-- <span style="color:black; font-weight:bold"> Plotting BIC Values Over All Models:</span> We confirm the results (as nearly identical to AIC) from the tables by directly plotting every BIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best.
+- <span style="color:black; font-weight:bold"> Plotting BIC Values Over All Models:</span> We confirm the results (as nearly identical to AIC) from the tables by directly plotting every BIC value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge models perform the best.
 
 
 ```{r}
@@ -1004,7 +1003,7 @@ gathered_data %>%
       y="BIC")
 ```
 
-- <span style="color:black; font-weight:bold"> Plotting Adjusted R-Squared Values Over All Models:</span> We confirm the results from the tables by directly plotting every R-Squared value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge perform the best. It is important to mention that although the performance differences seem less pronounced here than for AIC and BIC, the Adjusted R-Square can only take values between 0 and 1. 
+- <span style="color:black; font-weight:bold"> Plotting Adjusted R-Squared Values Over All Models:</span> We again confirm the results from the tables by directly plotting every R-Squared value for every method. OLS performs the worst, the stepwise methods perform slightly better, and LASSO and Ridge models perform the best. It is important to mention that although the performance differences seem less pronounced here than for AIC and BIC, the Adjusted R-Square can only take values between 0 and 1. 
 
 ```{r}
 R2_df <- data.frame(
@@ -1036,7 +1035,7 @@ gathered_data %>%
       y=expression(paste('Adjusted',R^2)))
 ```
 
-- <span style="color:black; font-weight:bold"> Plotting AIC and BIC Values for Every Method:</span> We again confirm the same results as from earlier plots. Additionally, note that for OLS and the Stepwise methods, BIC seems to be slightly higher and for LASSO and Ridge AIC seems to be slightly higher.
+- <span style="color:black; font-weight:bold"> Plotting AIC and BIC Values for Every Method:</span> We again confirm the same results as from earlier plots. Additionally, we note that for OLS and the Stepwise methods BIC values seem to be slightly higher, and for LASSO and Ridge models AIC values seem to be slightly higher.
 
 ```{r}
 Table_Full_New <- rbind(Table_Full[,c(1,2,3,5,6)],Table_Full[,c(1,8,9,11,12)],Table_Full[,c(1,14,15,17,18)])
@@ -1062,7 +1061,7 @@ ggplot(data = gathered_Full , aes(x=method, y=value)) +
   theme_light()
 ```
 
-- <span style="color:black; font-weight:bold"> Plotting Performances by Model:</span> Although we aim to compare variable selection methods, it can be interesting to consider performance metrics by model. We observe that overall AIC, BIC, and Adjusted $R^2$ are better for model 1 and model 3 than for model 2. These results make sense intuitively, since we are comparing model selection methods and a linear model (model 2) that has exclusively non-zero coefficients will lead to poorer performances than linear models inclyding non-zero coefficients (model 1 and 3).  
+- <span style="color:black; font-weight:bold"> Plotting Performances by Model:</span> Although we aim to compare variable selection methods, it can be interesting to consider performance metrics by underlying model. We observe that overall AIC, BIC, and Adjusted $R^2$ are better for model 1 and model 3 than for model 2. These results make sense intuitively, since we are comparing model selection methods and a linear model (model 2) that has exclusively non-zero coefficients will lead to poorer performances than linear models including non-zero coefficients (such as model 1 and 3 here).  
 
 ```{r}
 AIC_ByMod_df <- data.frame(
@@ -1137,7 +1136,7 @@ R2_ByMod_gather %>%
 
 ## Discussion and Conclusion
 
-The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendation of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern methods that outperform LASSO and Ridge that follow a mixed integer optimization approach to choosing best subsets, as outlined in a paper by Bertsimas, King, Mazumder (2015).
+The observation that LASSO and Ridge outperform the stepwise methods (and OLS), and also that LASSO outperforms Ridge is in line with the recommendations of by Hastie, Tibshirani, and Friedman (2009). Furthermore, there seem to be more modern variable selection methods that outperform LASSO and Ridge (that could be considered in a future project), which follow a mixed integer optimization approach to choosing best subsets, as outlined in a paper by Bertsimas, King, Mazumder (2015).
 
 # References
 
